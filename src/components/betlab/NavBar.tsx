@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import logoAsset from "@/assets/betlab-logo.svg.asset.json";
+
 
 const links = [
   { to: "/", label: "Signals" },
