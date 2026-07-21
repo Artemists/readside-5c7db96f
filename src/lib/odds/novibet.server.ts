@@ -1,19 +1,27 @@
 import type { NovibetOddsResult } from "./types";
 
-type Outcome = { name: string; price: number; point?: number };
-type Market = { key: string; outcomes?: Outcome[] };
-type Bookmaker = {
-  key: string;
-  title?: string;
-  last_update?: string;
-  markets?: Market[];
+type MLOdds = { home?: string; draw?: string; away?: string };
+type AHOdds = { hdp?: number; home?: string; away?: string };
+type OUOdds = { max?: number; over?: string; under?: string };
+type Market = {
+  name: string;
+  odds?: Array<MLOdds & AHOdds & OUOdds>;
+  updatedAt?: string;
 };
-type UpstreamEvent = {
-  id: string;
-  home_team: string;
-  away_team: string;
-  commence_time?: string;
-  bookmakers?: Bookmaker[];
+type OddsResponse = {
+  id: number | string;
+  home: string;
+  away: string;
+  date?: string;
+  status?: string;
+  bookmakers?: Record<string, Market[]>;
+};
+
+type EventItem = {
+  id: number | string;
+  home: string;
+  away: string;
+  date?: string;
 };
 
 export type NovibetQuery = {
@@ -23,24 +31,76 @@ export type NovibetQuery = {
   date?: string;
 };
 
-function pickEvent(events: UpstreamEvent[], q: NovibetQuery) {
-  if (!events?.length) return undefined;
-  if (q.matchId) return events.find((e) => e.id === q.matchId) ?? undefined;
-  const h = q.homeTeam?.toLowerCase();
-  const a = q.awayTeam?.toLowerCase();
-  if (h && a) {
-    return events.find(
-      (e) =>
-        e.home_team.toLowerCase().includes(h) &&
-        e.away_team.toLowerCase().includes(a),
-    );
-  }
-  return events[0];
+const BASE = "https://api.odds-api.io/v3";
+
+// Session-scoped memo: team-key -> eventId. Cleared on worker restart.
+const eventIdCache = new Map<string, string>();
+
+function cacheKey(q: NovibetQuery) {
+  return `${(q.homeTeam ?? "").toLowerCase()}|${(q.awayTeam ?? "").toLowerCase()}|${q.date ?? ""}`;
 }
 
-function priceFor(outcomes: Outcome[] | undefined, name: string) {
-  const o = outcomes?.find((x) => x.name.toLowerCase() === name.toLowerCase());
-  return o?.price ?? null;
+function num(v: string | number | undefined | null): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function eventMatches(e: EventItem, q: NovibetQuery) {
+  const h = q.homeTeam?.toLowerCase();
+  const a = q.awayTeam?.toLowerCase();
+  const eh = e.home?.toLowerCase() ?? "";
+  const ea = e.away?.toLowerCase() ?? "";
+  if (h && a) {
+    const hit =
+      (eh.includes(h) && ea.includes(a)) ||
+      (eh.includes(a) && ea.includes(h));
+    if (!hit) return false;
+  }
+  if (q.date && e.date) {
+    if (!e.date.startsWith(q.date.slice(0, 10))) return false;
+  }
+  return true;
+}
+
+async function resolveEventId(
+  q: NovibetQuery,
+  apiKey: string,
+): Promise<string | null> {
+  if (q.matchId && /^\d+$/.test(q.matchId)) return q.matchId;
+
+  const key = cacheKey(q);
+  const cached = eventIdCache.get(key);
+  if (cached) return cached;
+
+  // Try /events/search first if we have team text.
+  const searchTerm = q.homeTeam || q.awayTeam;
+  if (searchTerm) {
+    const url = `${BASE}/events/search?query=${encodeURIComponent(searchTerm)}&apiKey=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    if (res.ok) {
+      const body = (await res.json()) as EventItem[] | { events?: EventItem[] };
+      const list = Array.isArray(body) ? body : (body.events ?? []);
+      const match = list.find((e) => eventMatches(e, q));
+      if (match) {
+        const id = String(match.id);
+        eventIdCache.set(key, id);
+        return id;
+      }
+    }
+  }
+
+  // Fallback: list football events (next 14d by default).
+  const listUrl = `${BASE}/events?sport=football&apiKey=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(listUrl, { headers: { accept: "application/json" } });
+  if (!res.ok) return null;
+  const body = (await res.json()) as EventItem[] | { events?: EventItem[] };
+  const list = Array.isArray(body) ? body : (body.events ?? []);
+  const match = list.find((e) => eventMatches(e, q));
+  if (!match) return null;
+  const id = String(match.id);
+  eventIdCache.set(key, id);
+  return id;
 }
 
 export async function fetchNovibetOdds(
@@ -49,64 +109,70 @@ export async function fetchNovibetOdds(
   const apiKey = process.env.ODDS_API_IO_KEY;
   if (!apiKey) return { status: "no_odds_available", reason: "missing_api_key" };
 
-  const params = new URLSearchParams({
-    apiKey,
-    regions: "eu",
-    markets: "h2h,spreads,totals",
-    oddsFormat: "decimal",
-    bookmakers: "novibet",
-  });
-  if (q.date) params.set("date", q.date);
-
-  const url = `https://api.odds-api.io/v2/odds/soccer?${params.toString()}`;
-
   try {
+    const eventId = await resolveEventId(q, apiKey);
+    if (!eventId) return { status: "no_odds_available", reason: "no_match" };
+
+    const url = `${BASE}/odds?eventId=${encodeURIComponent(eventId)}&bookmakers=Novibet&apiKey=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, { headers: { accept: "application/json" } });
-    if (!res.ok) return { status: "no_odds_available", reason: `upstream_${res.status}` };
-
-    const events = (await res.json()) as UpstreamEvent[];
-    const event = pickEvent(events, q);
-    if (!event) return { status: "no_odds_available", reason: "no_match" };
-
-    const novibet = event.bookmakers?.find(
-      (b) => b.key === "novibet" || /novibet/i.test(b.title ?? ""),
-    );
-    if (!novibet) return { status: "no_odds_available", reason: "no_novibet" };
-
-    const h2h = novibet.markets?.find((m) => m.key === "h2h");
-    if (!h2h) return { status: "no_odds_available", reason: "no_h2h" };
-
-    const home = priceFor(h2h.outcomes, event.home_team);
-    const away = priceFor(h2h.outcomes, event.away_team);
-    const draw = priceFor(h2h.outcomes, "Draw");
-    if (home == null || away == null) {
-      return { status: "no_odds_available", reason: "incomplete_h2h" };
+    if (!res.ok) {
+      return { status: "no_odds_available", reason: `upstream_${res.status}` };
     }
 
-    const spreadMarket = novibet.markets?.find((m) => m.key === "spreads");
-    const totalsMarket = novibet.markets?.find((m) => m.key === "totals");
+    const body = (await res.json()) as OddsResponse | OddsResponse[];
+    const event = Array.isArray(body) ? body[0] : body;
+    if (!event?.bookmakers) {
+      return { status: "no_odds_available", reason: "no_bookmakers" };
+    }
+
+    // Case-insensitive lookup for "Novibet" key.
+    const novibetKey = Object.keys(event.bookmakers).find(
+      (k) => k.toLowerCase() === "novibet",
+    );
+    if (!novibetKey) return { status: "no_odds_available", reason: "no_novibet" };
+
+    const markets = event.bookmakers[novibetKey] ?? [];
+    const ml = markets.find((m) => m.name === "ML");
+    const ah = markets.find((m) => m.name === "Asian Handicap");
+    const ou = markets.find((m) => m.name === "Over/Under");
+
+    const mlOdds = ml?.odds?.[0];
+    const home = num(mlOdds?.home);
+    const away = num(mlOdds?.away);
+    const draw = num(mlOdds?.draw);
+    if (home == null || away == null) {
+      return { status: "no_odds_available", reason: "no_ml" };
+    }
+
+    const ahOdds = ah?.odds?.[0];
+    const spread =
+      ahOdds && num(ahOdds.home) != null && num(ahOdds.away) != null
+        ? {
+            hdp: ahOdds.hdp ?? 0,
+            home: num(ahOdds.home)!,
+            away: num(ahOdds.away)!,
+          }
+        : null;
+
+    const ouOdds = ou?.odds?.[0];
+    const totals =
+      ouOdds && num(ouOdds.over) != null && num(ouOdds.under) != null
+        ? {
+            line: ouOdds.max ?? 0,
+            over: num(ouOdds.over)!,
+            under: num(ouOdds.under)!,
+          }
+        : null;
 
     return {
       status: "ok",
-      market: "h2h",
+      eventId: String(event.id),
       home,
       draw,
       away,
-      spread: spreadMarket
-        ? {
-            line: spreadMarket.outcomes?.[0]?.point ?? 0,
-            home: priceFor(spreadMarket.outcomes, event.home_team) ?? 0,
-            away: priceFor(spreadMarket.outcomes, event.away_team) ?? 0,
-          }
-        : null,
-      totals: totalsMarket
-        ? {
-            line: totalsMarket.outcomes?.[0]?.point ?? 0,
-            over: priceFor(totalsMarket.outcomes, "Over") ?? 0,
-            under: priceFor(totalsMarket.outcomes, "Under") ?? 0,
-          }
-        : null,
-      updatedAt: novibet.last_update ?? new Date().toISOString(),
+      spread,
+      totals,
+      updatedAt: ml?.updatedAt ?? new Date().toISOString(),
     };
   } catch (err) {
     console.error("novibet-odds fetch failed", err);
