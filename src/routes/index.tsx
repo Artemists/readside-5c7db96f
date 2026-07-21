@@ -13,13 +13,13 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Morning Briefing — BetLab" },
+      { title: "Readside BetLab" },
       {
         name: "description",
         content:
           "Today's market conditions, signals and traps across football matches.",
       },
-      { property: "og:title", content: "Morning Briefing — BetLab" },
+      { property: "og:title", content: "Readside BetLab" },
     ],
   }),
   component: MorningBriefing,

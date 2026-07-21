@@ -78,21 +78,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "BetLab — Data-driven match intelligence" },
+      { title: "Readside BetLab" },
       {
         name: "description",
         content:
-          "BetLab surfaces value, traps and consensus odds for football matches. Signals, analysis and history in one dashboard.",
+          "Today's market conditions, signals and traps across football matches.",
       },
       { name: "author", content: "BetLab" },
-      { property: "og:title", content: "BetLab — Data-driven match intelligence" },
+      { property: "og:title", content: "Readside BetLab" },
       {
         property: "og:description",
         content:
-          "Signals, traps and consensus odds for football matches — with Novibet and market averages side by side.",
+          "Today's market conditions, signals and traps across football matches.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Readside BetLab" },
+      { name: "twitter:description", content: "Today's market conditions, signals and traps across football matches." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/85c355d9-3b5c-4e49-b963-818f38fbf41c/id-preview-572d491a--87e3b22f-c20b-47af-903c-7e7fd0354057.lovable.app-1784617793743.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/85c355d9-3b5c-4e49-b963-818f38fbf41c/id-preview-572d491a--87e3b22f-c20b-47af-903c-7e7fd0354057.lovable.app-1784617793743.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
