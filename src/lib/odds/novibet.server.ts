@@ -1,11 +1,16 @@
 import type { NovibetOddsResult } from "./types";
 
-type MLOdds = { home?: string; draw?: string; away?: string };
-type AHOdds = { hdp?: number; home?: string; away?: string };
-type OUOdds = { max?: number; over?: string; under?: string };
+type OddsRow = {
+  home?: string;
+  draw?: string;
+  away?: string;
+  over?: string;
+  under?: string;
+  hdp?: number;
+};
 type Market = {
   name: string;
-  odds?: Array<MLOdds & AHOdds & OUOdds>;
+  odds?: OddsRow[];
   updatedAt?: string;
 };
 type OddsResponse = {
@@ -133,8 +138,12 @@ export async function fetchNovibetOdds(
 
     const markets = event.bookmakers[novibetKey] ?? [];
     const ml = markets.find((m) => m.name === "ML");
-    const ah = markets.find((m) => m.name === "Asian Handicap");
-    const ou = markets.find((m) => m.name === "Over/Under");
+    const ah = markets.find(
+      (m) => m.name === "Asian Handicap" || m.name === "AH",
+    );
+    const ou = markets.find(
+      (m) => m.name === "Totals" || m.name === "Over/Under",
+    );
 
     const mlOdds = ml?.odds?.[0];
     const home = num(mlOdds?.home);
@@ -158,11 +167,12 @@ export async function fetchNovibetOdds(
     const totals =
       ouOdds && num(ouOdds.over) != null && num(ouOdds.under) != null
         ? {
-            line: ouOdds.max ?? 0,
+            line: ouOdds.hdp ?? 0,
             over: num(ouOdds.over)!,
             under: num(ouOdds.under)!,
           }
         : null;
+
 
     return {
       status: "ok",
