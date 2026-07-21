@@ -138,8 +138,12 @@ export async function fetchNovibetOdds(
 
     const markets = event.bookmakers[novibetKey] ?? [];
     const ml = markets.find((m) => m.name === "ML");
-    const ah = markets.find((m) => m.name === "Asian Handicap");
-    const ou = markets.find((m) => m.name === "Over/Under");
+    const ah = markets.find(
+      (m) => m.name === "Asian Handicap" || m.name === "AH",
+    );
+    const ou = markets.find(
+      (m) => m.name === "Totals" || m.name === "Over/Under",
+    );
 
     const mlOdds = ml?.odds?.[0];
     const home = num(mlOdds?.home);
@@ -163,11 +167,12 @@ export async function fetchNovibetOdds(
     const totals =
       ouOdds && num(ouOdds.over) != null && num(ouOdds.under) != null
         ? {
-            line: ouOdds.max ?? 0,
+            line: ouOdds.hdp ?? 0,
             over: num(ouOdds.over)!,
             under: num(ouOdds.under)!,
           }
         : null;
+
 
     return {
       status: "ok",
