@@ -16,6 +16,7 @@ import { Route as PopularPickWarningRouteImport } from './routes/popular-pick-wa
 import { Route as MatchIntelligenceRouteImport } from './routes/match-intelligence'
 import { Route as GoalExplosionRouteImport } from './routes/goal-explosion'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicTestOddsRouteImport } from './routes/api/public/test-odds'
 
 const YesterdayRoute = YesterdayRouteImport.update({
   id: '/yesterday',
@@ -52,6 +53,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTestOddsRoute = ApiPublicTestOddsRouteImport.update({
+  id: '/api/public/test-odds',
+  path: '/api/public/test-odds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/value-scanner': typeof ValueScannerRoute
   '/yesterday': typeof YesterdayRoute
+  '/api/public/test-odds': typeof ApiPublicTestOddsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/value-scanner': typeof ValueScannerRoute
   '/yesterday': typeof YesterdayRoute
+  '/api/public/test-odds': typeof ApiPublicTestOddsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/value-scanner': typeof ValueScannerRoute
   '/yesterday': typeof YesterdayRoute
+  '/api/public/test-odds': typeof ApiPublicTestOddsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/value-scanner'
     | '/yesterday'
+    | '/api/public/test-odds'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/value-scanner'
     | '/yesterday'
+    | '/api/public/test-odds'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/value-scanner'
     | '/yesterday'
+    | '/api/public/test-odds'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ValueScannerRoute: typeof ValueScannerRoute
   YesterdayRoute: typeof YesterdayRoute
+  ApiPublicTestOddsRoute: typeof ApiPublicTestOddsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/test-odds': {
+      id: '/api/public/test-odds'
+      path: '/api/public/test-odds'
+      fullPath: '/api/public/test-odds'
+      preLoaderRoute: typeof ApiPublicTestOddsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,17 +203,8 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ValueScannerRoute: ValueScannerRoute,
   YesterdayRoute: YesterdayRoute,
+  ApiPublicTestOddsRoute: ApiPublicTestOddsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
