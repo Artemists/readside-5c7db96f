@@ -1,11 +1,16 @@
 import type { NovibetOddsResult } from "./types";
 
-type MLOdds = { home?: string; draw?: string; away?: string };
-type AHOdds = { hdp?: number; home?: string; away?: string };
-type OUOdds = { max?: number; over?: string; under?: string };
+type OddsRow = {
+  home?: string;
+  draw?: string;
+  away?: string;
+  over?: string;
+  under?: string;
+  hdp?: number;
+};
 type Market = {
   name: string;
-  odds?: Array<MLOdds & AHOdds & OUOdds>;
+  odds?: OddsRow[];
   updatedAt?: string;
 };
 type OddsResponse = {
