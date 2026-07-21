@@ -4,14 +4,13 @@ import { useMemo, useState } from "react";
 import {
   Card,
   Divider,
-  MatchAverageTag,
   PageShell,
   SectionLabel,
   Spinner,
 } from "@/components/betlab/primitives";
 import { WC26_MATCHES, type Match } from "@/lib/matches";
 import { betLabAssessment } from "@/lib/nine-signal";
-import { useConsensusOdds, useNovibetOdds } from "@/hooks/use-odds";
+import { useNovibetOdds } from "@/hooks/use-odds";
 import {
   edgePercent,
   expectedValue,
@@ -63,10 +62,6 @@ function ValueRow({ match }: { match: Match }) {
     { matchId: match.id, homeTeam: match.home, awayTeam: match.away },
     expanded,
   );
-  const fallback = useConsensusOdds(
-    { matchId: match.id, homeTeam: match.home, awayTeam: match.away },
-    expanded && novibet.data?.status === "no_odds_available",
-  );
 
   const assessment = betLabAssessment(match.id);
   const fair = assessment.fairProbability;
@@ -74,18 +69,9 @@ function ValueRow({ match }: { match: Match }) {
   const view = useMemo(() => {
     if (novibet.data?.status === "ok") {
       return {
-        source: "novibet" as const,
         home: novibet.data.home,
         draw: novibet.data.draw,
         away: novibet.data.away,
-      };
-    }
-    if (fallback.data && fallback.data.consensus.home) {
-      return {
-        source: "consensus" as const,
-        home: fallback.data.consensus.home,
-        draw: fallback.data.consensus.draw,
-        away: fallback.data.consensus.away,
       };
     }
     return null;
