@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 
 import { getNovibetOdds } from "@/lib/odds/novibet.functions";
-import { getConsensusOdds } from "@/lib/odds/consensus.functions";
 import type { MatchQuery } from "@/lib/odds/types";
 import { el } from "@/lib/i18n";
 
@@ -15,30 +14,6 @@ export function useNovibetOdds(query: MatchQuery, enabled = true) {
 
   const q = useQuery({
     queryKey: ["novibet-odds", query.matchId ?? `${query.homeTeam}-${query.awayTeam}`],
-    queryFn: () => fetchFn({ data: query }),
-    enabled,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  });
-
-  useEffect(() => {
-    if (q.isError && !notified.current) {
-      notified.current = true;
-      toast.error(el.loadOddsFail);
-    }
-  }, [q.isError]);
-
-  return q;
-}
-
-export function useConsensusOdds(query: MatchQuery, enabled = true) {
-  const fetchFn = useServerFn(getConsensusOdds);
-  const notified = useRef(false);
-
-  const q = useQuery({
-    queryKey: ["consensus-odds", query.matchId ?? `${query.homeTeam}-${query.awayTeam}`],
     queryFn: () => fetchFn({ data: query }),
     enabled,
     staleTime: Infinity,
