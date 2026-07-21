@@ -1,24 +1,51 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+import {
+  Bullet,
+  Card,
+  Divider,
+  PageShell,
+  SectionLabel,
+  StatCard,
+  WarningBadge,
+} from "@/components/betlab/primitives";
+
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Morning Briefing — BetLab" },
+      {
+        name: "description",
+        content:
+          "Today's market conditions, signals and traps across football matches.",
+      },
+      { property: "og:title", content: "Morning Briefing — BetLab" },
+    ],
+  }),
+  component: MorningBriefing,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function MorningBriefing() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <PageShell>
+      <Card>
+        <h1 className="title-display">Good morning.</h1>
+        <Divider />
+        <SectionLabel>Today's market conditions</SectionLabel>
+        <WarningBadge>High uncertainty day</WarningBadge>
+        <div className="flex flex-col gap-4">
+          <Bullet>Several key teams have rotation risk</Bullet>
+          <Bullet>Many favorites are overpriced</Bullet>
+          <Bullet>Goal markets look stronger than winner markets</Bullet>
+        </div>
+        <Divider />
+        <SectionLabel>Today's signals</SectionLabel>
+        <div className="flex gap-3">
+          <StatCard icon="🔥" value={5} label="Opportunities" />
+          <StatCard icon="⚠" value={4} label="Traps" />
+          <StatCard icon="🚫" value={12} label="Ignore" />
+        </div>
+      </Card>
+    </PageShell>
   );
 }
