@@ -17,15 +17,3 @@ export type NovibetOddsResult =
       updatedAt: string;
     }
   | { status: "no_odds_available"; reason?: string };
-
-export type ConsensusOddsResult = {
-  consensus: {
-    home: number | null;
-    draw: number | null;
-    away: number | null;
-  };
-  kalshi: number | null; // implied prob 0..1 for home outcome
-  polymarket: number | null; // implied prob 0..1 for home outcome
-  bookmakerCount: number;
-  updatedAt: string;
-};

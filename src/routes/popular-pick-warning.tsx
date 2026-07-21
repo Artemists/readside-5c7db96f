@@ -11,7 +11,8 @@ import {
 } from "@/components/betlab/primitives";
 import { WC26_MATCHES } from "@/lib/matches";
 import { betLabAssessment } from "@/lib/nine-signal";
-import { useConsensusOdds } from "@/hooks/use-odds";
+import { useNovibetOdds } from "@/hooks/use-odds";
+import { impliedProbability } from "@/lib/value";
 import { el } from "@/lib/i18n";
 
 export const Route = createFileRoute("/popular-pick-warning")({
@@ -36,7 +37,7 @@ function PopularPickWarning() {
     [matchId],
   );
 
-  const consensus = useConsensusOdds({
+  const novibet = useNovibetOdds({
     matchId: match.id,
     homeTeam: match.home,
     awayTeam: match.away,
@@ -44,9 +45,14 @@ function PopularPickWarning() {
 
   const assessment = betLabAssessment(match.id);
 
-  const publicConfidence = derivePublicConfidence(consensus.data);
+  const publicConfidence =
+    novibet.data?.status === "ok"
+      ? impliedProbability(novibet.data.home) * 100
+      : null;
+
   const verdict =
-    publicConfidence != null && publicConfidence - assessment.assessmentPercent > 15
+    publicConfidence != null &&
+    publicConfidence - assessment.assessmentPercent > 15
       ? "Proceed carefully · Consider alternatives"
       : "Signal roughly in line with the market";
 
@@ -72,7 +78,7 @@ function PopularPickWarning() {
           <StatBlock
             label={el.publicConfidence}
             value={
-              consensus.isLoading ? (
+              novibet.isLoading ? (
                 <Spinner label={el.loadingOdds} />
               ) : publicConfidence != null ? (
                 `${publicConfidence.toFixed(0)}%`
@@ -80,7 +86,7 @@ function PopularPickWarning() {
                 "—"
               )
             }
-            hint={publicConfidenceSource(consensus.data)}
+            hint="Implied by Novibet home odds"
           />
           <StatBlock
             label={el.betLabAssessment}
@@ -144,27 +150,4 @@ function MatchPicker({
       ))}
     </select>
   );
-}
-
-function derivePublicConfidence(
-  data: ReturnType<typeof useConsensusOdds>["data"],
-): number | null {
-  if (!data) return null;
-  // Prefer Kalshi/Polymarket implied probability for the home outcome.
-  if (data.kalshi != null) return data.kalshi * 100;
-  if (data.polymarket != null) return data.polymarket * 100;
-  // Fall back to inverse of consensus odds.
-  const h = data.consensus.home;
-  if (h && h > 1) return (1 / h) * 100;
-  return null;
-}
-
-function publicConfidenceSource(
-  data: ReturnType<typeof useConsensusOdds>["data"],
-): string {
-  if (!data) return "";
-  if (data.kalshi != null) return "Kalshi";
-  if (data.polymarket != null) return "Polymarket";
-  if (data.bookmakerCount) return `Consensus · ${data.bookmakerCount} books`;
-  return "—";
 }
