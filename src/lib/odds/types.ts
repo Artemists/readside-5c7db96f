@@ -8,11 +8,11 @@ export type MatchQuery = {
 export type NovibetOddsResult =
   | {
       status: "ok";
-      market: string;
+      eventId: string;
       home: number;
       draw: number | null;
       away: number;
-      spread: { line: number; home: number; away: number } | null;
+      spread: { hdp: number; home: number; away: number } | null;
       totals: { line: number; over: number; under: number } | null;
       updatedAt: string;
     }
