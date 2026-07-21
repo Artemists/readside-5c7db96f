@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import logoAsset from "@/assets/betlab-logo.svg.asset.json";
+
 
 const links = [
   { to: "/", label: "Signals" },
@@ -13,14 +15,16 @@ export function NavBar() {
     <header className="w-full bg-card">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-4 sm:px-12">
         <div className="flex items-center gap-10">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-accent">
-              <span className="h-2 w-2 rounded-sm bg-background" />
-            </span>
-            <span className="font-display text-[15px] font-bold tracking-tight text-text-primary">
-              BetLab
-            </span>
+          <Link to="/" aria-label="BetLab home" className="flex items-center">
+            <img
+              src={logoAsset.url}
+              alt="BetLab"
+              className="h-7 w-auto"
+              width={1068}
+              height={326}
+            />
           </Link>
+
           <nav className="hidden items-center gap-7 md:flex">
             {links.map((l) => (
               <Link
