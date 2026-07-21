@@ -75,7 +75,7 @@ function ValueRow({ match }: { match: Match }) {
       };
     }
     return null;
-  }, [novibet.data, fallback.data]);
+  }, [novibet.data]);
 
   return (
     <div className="p-5">
@@ -100,12 +100,7 @@ function ValueRow({ match }: { match: Match }) {
             <Spinner label={el.loadingOdds} />
           ) : view ? (
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <SectionLabel>
-                  {view.source === "novibet" ? "Novibet odds" : "Market average"}
-                </SectionLabel>
-                {view.source === "consensus" ? <MatchAverageTag /> : null}
-              </div>
+              <SectionLabel>Novibet odds</SectionLabel>
               <div className="grid grid-cols-3 gap-3">
                 <OutcomeCard
                   name={match.home}
