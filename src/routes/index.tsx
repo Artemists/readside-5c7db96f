@@ -26,6 +26,7 @@ export const Route = createFileRoute("/")({
 });
 
 function MorningBriefing() {
+  const { opportunities, traps, ignore } = getTodaySignals();
   return (
     <PageShell>
       <Card>
@@ -41,11 +42,35 @@ function MorningBriefing() {
         <Divider />
         <SectionLabel>Today's signals</SectionLabel>
         <div className="flex gap-3">
-          <StatCard icon="🔥" value={5} label="Opportunities" />
-          <StatCard icon="⚠" value={4} label="Traps" />
-          <StatCard icon="🚫" value={12} label="Ignore" />
+          <StatCard icon="🔥" value={opportunities} label="Opportunities" />
+          <StatCard icon="⚠" value={traps} label="Traps" />
+          <StatCard icon="🚫" value={ignore} label="Ignore" />
         </div>
       </Card>
     </PageShell>
   );
+}
+
+/** Deterministic per-local-day signal counts (Europe/Athens). */
+function getTodaySignals() {
+  const key = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Athens",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const rand = (min: number, max: number, salt: number) => {
+    const x = Math.imul(h ^ salt, 2654435761) >>> 0;
+    return min + (x % (max - min + 1));
+  };
+  return {
+    opportunities: rand(2, 8, 1),
+    traps: rand(1, 6, 2),
+    ignore: rand(6, 16, 3),
+  };
 }
