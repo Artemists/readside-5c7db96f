@@ -111,6 +111,16 @@ export async function runScanNow() {
         continue;
       }
       stage.oddsOk++;
+      if (diagLogged < 3) {
+        const books = odds.bookmakers ?? {};
+        const summary = Object.entries(books).map(([book, markets]) => ({
+          book,
+          markets: markets.map((m) => m.name),
+        }));
+        console.log("scan:diag", { eventId: e.id, home: e.home, away: e.away, books: summary });
+        diagLogged++;
+      }
+
       // Prefer the already-normalized (string) sport/league from listEvents;
       // /v3/odds returns them as { name, slug } objects which would break
       // downstream string-based checks.
