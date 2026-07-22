@@ -14,7 +14,128 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      match_signals: {
+        Row: {
+          away: string
+          best_odds: number | null
+          competition: string | null
+          confidence: number
+          context_score: number
+          edge_percent: number | null
+          ev_percent: number | null
+          explosion_score: number
+          fair_probability: number | null
+          home: string
+          id: string
+          implied_probability: number | null
+          kickoff: string | null
+          local_date: string
+          match_id: string
+          reasoning: string | null
+          recommended_market: string | null
+          recommended_selection: string | null
+          scan_id: string | null
+          signals: Json
+          sport: string
+          stake: string
+          trap_score: number
+          updated_at: string
+          value_score: number
+          verdict: string
+        }
+        Insert: {
+          away: string
+          best_odds?: number | null
+          competition?: string | null
+          confidence?: number
+          context_score?: number
+          edge_percent?: number | null
+          ev_percent?: number | null
+          explosion_score?: number
+          fair_probability?: number | null
+          home: string
+          id?: string
+          implied_probability?: number | null
+          kickoff?: string | null
+          local_date: string
+          match_id: string
+          reasoning?: string | null
+          recommended_market?: string | null
+          recommended_selection?: string | null
+          scan_id?: string | null
+          signals?: Json
+          sport: string
+          stake?: string
+          trap_score?: number
+          updated_at?: string
+          value_score?: number
+          verdict: string
+        }
+        Update: {
+          away?: string
+          best_odds?: number | null
+          competition?: string | null
+          confidence?: number
+          context_score?: number
+          edge_percent?: number | null
+          ev_percent?: number | null
+          explosion_score?: number
+          fair_probability?: number | null
+          home?: string
+          id?: string
+          implied_probability?: number | null
+          kickoff?: string | null
+          local_date?: string
+          match_id?: string
+          reasoning?: string | null
+          recommended_market?: string | null
+          recommended_selection?: string | null
+          scan_id?: string | null
+          signals?: Json
+          sport?: string
+          stake?: string
+          trap_score?: number
+          updated_at?: string
+          value_score?: number
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_signals_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scans: {
+        Row: {
+          duration_ms: number | null
+          fixtures_count: number
+          id: string
+          local_date: string
+          scanned_at: string
+          status: string
+        }
+        Insert: {
+          duration_ms?: number | null
+          fixtures_count?: number
+          id?: string
+          local_date: string
+          scanned_at?: string
+          status?: string
+        }
+        Update: {
+          duration_ms?: number | null
+          fixtures_count?: number
+          id?: string
+          local_date?: string
+          scanned_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
