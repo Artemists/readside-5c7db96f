@@ -72,6 +72,11 @@ export const SCAN = {
   eventFreshMinutes: 30,
   // Hard cap on how many events we score per scan (quota control).
   maxEvents: 30,
+  // How far ahead of "now" we pull fixtures for.
+  windowHours: 72,
+  // Rows for kickoffs beyond this horizon are marked provisional (odds/lines
+  // will move a lot before kickoff).
+  provisionalAfterHours: 24,
   sports: ["football"] as const,
   bookmakers: ["Bet365", "Novibet"] as const,
 };
