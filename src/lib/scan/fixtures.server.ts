@@ -82,12 +82,17 @@ export async function listEvents(
   };
 }
 
-/** Fetch odds for a single event across all bookmakers. */
+/** Fetch odds for a single event, restricted to the given bookmakers.
+ *  The /v3/odds endpoint REQUIRES a `bookmakers=` query param — omitting it
+ *  returns `{"error":"Missing bookmakers"}` with HTTP 200. Our plan currently
+ *  allows only 2 selected bookmakers (Bet365, Novibet). */
 export async function fetchOddsForEvent(
   eventId: string,
   apiKey: string,
+  bookmakers: readonly string[],
 ): Promise<{ event: OddsEvent | null; status: CallStatus }> {
-  const url = `${BASE}/odds?eventId=${encodeURIComponent(eventId)}&apiKey=${encodeURIComponent(apiKey)}`;
+  const books = bookmakers.join(",");
+  const url = `${BASE}/odds?eventId=${encodeURIComponent(eventId)}&bookmakers=${encodeURIComponent(books)}&apiKey=${encodeURIComponent(apiKey)}`;
   let res: Response;
   try {
     res = await fetch(url, { headers: { accept: "application/json" } });
@@ -97,7 +102,19 @@ export async function fetchOddsForEvent(
   }
   if (res.status === 429) return { event: null, status: "rate_limited" };
   if (!res.ok) return { event: null, status: "failed" };
-  const body = (await res.json()) as OddsEvent | OddsEvent[];
-  const event = Array.isArray(body) ? body[0] : body;
-  return { event: event ?? null, status: "ok" };
+  const body = (await res.json()) as
+    | OddsEvent
+    | OddsEvent[]
+    | { error?: string };
+  const raw = Array.isArray(body) ? body[0] : body;
+  if (!raw) return { event: null, status: "ok" };
+  if ("error" in raw && raw.error) {
+    const msg = String(raw.error).toLowerCase();
+    console.error(`fetchOddsForEvent ${eventId}: ${raw.error}`);
+    if (msg.includes("rate") || msg.includes("limit") || msg.includes("quota")) {
+      return { event: null, status: "rate_limited" };
+    }
+    return { event: null, status: "failed" };
+  }
+  return { event: raw as OddsEvent, status: "ok" };
 }
