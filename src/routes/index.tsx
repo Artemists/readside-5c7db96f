@@ -19,7 +19,7 @@ import {
   runDailyScan,
 } from "@/lib/scan/scan.functions";
 import { athensLocalTime } from "@/lib/time";
-import { SCAN } from "@/lib/scan/config";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
