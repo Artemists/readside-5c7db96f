@@ -18,6 +18,7 @@ import {
   runDailyScan,
 } from "@/lib/scan/scan.functions";
 import { athensLocalDate, athensLocalTime } from "@/lib/time";
+import { MatchCard } from "@/components/betlab/MatchCard";
 
 
 export const Route = createFileRoute("/")({
