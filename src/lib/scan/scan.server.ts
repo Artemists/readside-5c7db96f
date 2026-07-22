@@ -1,8 +1,9 @@
 import { SCAN } from "./config";
 import { athensLocalDate } from "@/lib/time";
 import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
-import { scoreEvent } from "./scoring.server";
+import { scoreEvent, competitionTier } from "./scoring.server";
 import type { ScoredMatch } from "./types";
+
 
 type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
 
