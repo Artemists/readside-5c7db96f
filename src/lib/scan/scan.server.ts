@@ -27,7 +27,7 @@ export async function runScanNow() {
     else if (s === "failed") sawFailure = true;
   };
 
-  // 1) Pull events across sports, filter to today (Athens-local).
+  // 1) Pull events across sports, filter to the upcoming kickoff window.
   const stage = {
     fetched: 0,
     afterStatus: 0,
@@ -36,6 +36,9 @@ export async function runScanNow() {
     oddsError: 0,
     scored: 0,
   };
+  const nowMs = Date.now();
+  const windowEndMs = nowMs + SCAN.windowHours * 3_600_000;
+  const provisionalCutoffMs = nowMs + SCAN.provisionalAfterHours * 3_600_000;
   const allEvents: Array<{
     id: string;
     sport: string;
@@ -53,8 +56,8 @@ export async function runScanNow() {
       // Real values seen: "pending" (upcoming), "settled", "cancelled", "live".
       if (e.status && e.status !== "pending") continue;
       stage.afterStatus++;
-      const d = e.date ? athensLocalDate(new Date(e.date)) : null;
-      if (d && d === localDate) {
+      const t = e.date ? new Date(e.date).getTime() : NaN;
+      if (Number.isFinite(t) && t >= nowMs && t <= windowEndMs) {
         stage.afterDate++;
         allEvents.push({
           id: String(e.id),
@@ -74,12 +77,12 @@ export async function runScanNow() {
 
 
   // Pre-fetch existing fresh signals so we can skip re-fetching their odds.
-  const freshCutoff = new Date(Date.now() - SCAN.eventFreshMinutes * 60_000).toISOString();
+  // Freshness is by match_id across the whole window (matches can span days).
+  const freshCutoff = new Date(nowMs - SCAN.eventFreshMinutes * 60_000).toISOString();
   const { data: freshRows } = events.length
     ? await supabaseAdmin
         .from("match_signals")
         .select("match_id, updated_at")
-        .eq("local_date", localDate)
         .in("match_id", events.map((e) => e.id))
         .gte("updated_at", freshCutoff)
     : { data: [] as Array<{ match_id: string; updated_at: string }> };
@@ -152,33 +155,41 @@ export async function runScanNow() {
   }
 
   if (scored.length > 0) {
-    const rows = scored.map((s) => ({
-      scan_id: scan.id,
-      local_date: localDate,
-      match_id: s.event.id,
-      sport: s.event.sport,
-      competition: s.event.competition,
-      home: s.event.home,
-      away: s.event.away,
-      kickoff: s.event.kickoff,
-      verdict: s.verdict,
-      context_score: s.contextScore,
-      explosion_score: s.explosionScore,
-      value_score: s.valueScore,
-      trap_score: s.trapScore,
-      confidence: s.confidence,
-      stake: s.stake,
-      recommended_market: s.recommendedMarket,
-      recommended_selection: s.recommendedSelection,
-      best_odds: s.bestOdds,
-      fair_probability: s.fairProbability,
-      implied_probability: s.impliedProbability,
-      edge_percent: s.edgePercent,
-      ev_percent: s.evPercent,
-      reasoning: s.reasoning,
-      signals: s.signals as never,
-      updated_at: new Date().toISOString(),
-    }));
+    const rows = scored.map((s) => {
+      const koMs = s.event.kickoff ? new Date(s.event.kickoff).getTime() : NaN;
+      const rowLocalDate = Number.isFinite(koMs)
+        ? athensLocalDate(new Date(koMs))
+        : localDate;
+      const provisional = Number.isFinite(koMs) ? koMs > provisionalCutoffMs : false;
+      return {
+        scan_id: scan.id,
+        local_date: rowLocalDate,
+        match_id: s.event.id,
+        sport: s.event.sport,
+        competition: s.event.competition,
+        home: s.event.home,
+        away: s.event.away,
+        kickoff: s.event.kickoff,
+        verdict: s.verdict,
+        context_score: s.contextScore,
+        explosion_score: s.explosionScore,
+        value_score: s.valueScore,
+        trap_score: s.trapScore,
+        confidence: s.confidence,
+        stake: s.stake,
+        recommended_market: s.recommendedMarket,
+        recommended_selection: s.recommendedSelection,
+        best_odds: s.bestOdds,
+        fair_probability: s.fairProbability,
+        implied_probability: s.impliedProbability,
+        edge_percent: s.edgePercent,
+        ev_percent: s.evPercent,
+        reasoning: s.reasoning,
+        signals: s.signals as never,
+        provisional,
+        updated_at: new Date().toISOString(),
+      };
+    });
     const { error: rowsErr } = await supabaseAdmin
       .from("match_signals")
       .upsert(rows, { onConflict: "local_date,match_id" });

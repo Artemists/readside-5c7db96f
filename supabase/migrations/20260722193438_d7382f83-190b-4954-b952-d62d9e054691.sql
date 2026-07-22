@@ -1,0 +1,1 @@
+ALTER TABLE public.match_signals ADD COLUMN IF NOT EXISTS provisional boolean NOT NULL DEFAULT false;

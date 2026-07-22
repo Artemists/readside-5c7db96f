@@ -197,15 +197,24 @@ export const getMatchSignals = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => z.object({ matchId: z.string() }).parse(raw))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const today = athensLocalDate();
     const { data: row } = await supabaseAdmin
       .from("match_signals")
       .select("*")
-      .eq("local_date", today)
       .eq("match_id", data.matchId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     return row;
   });
+
+const UPCOMING_COLUMNS =
+  "match_id, home, away, kickoff, competition, sport, verdict, ev_percent, edge_percent, value_score, trap_score, context_score, confidence, stake, recommended_market, recommended_selection, best_odds, provisional";
+
+function windowBounds() {
+  const now = new Date();
+  const end = new Date(now.getTime() + SCAN.windowHours * 3_600_000);
+  return { fromIso: now.toISOString(), toIso: end.toISOString() };
+}
 
 export const listByVerdict = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
@@ -218,15 +227,26 @@ export const listByVerdict = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const today = athensLocalDate();
+    const { fromIso, toIso } = windowBounds();
     let q = supabaseAdmin
       .from("match_signals")
-      .select(
-        "match_id, home, away, kickoff, competition, sport, verdict, ev_percent, edge_percent, value_score, trap_score, context_score, recommended_market, recommended_selection, best_odds",
-      )
-      .eq("local_date", today)
-      .order("ev_percent", { ascending: false });
+      .select(UPCOMING_COLUMNS)
+      .gte("kickoff", fromIso)
+      .lte("kickoff", toIso)
+      .order("kickoff", { ascending: true });
     if (data.verdict) q = q.eq("verdict", data.verdict);
     const { data: rows } = await q;
     return rows ?? [];
   });
+
+export const listUpcoming = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { fromIso, toIso } = windowBounds();
+  const { data: rows } = await supabaseAdmin
+    .from("match_signals")
+    .select(UPCOMING_COLUMNS)
+    .gte("kickoff", fromIso)
+    .lte("kickoff", toIso)
+    .order("kickoff", { ascending: true });
+  return rows ?? [];
+});

@@ -31,6 +31,7 @@ export type Database = {
           kickoff: string | null
           local_date: string
           match_id: string
+          provisional: boolean
           reasoning: string | null
           recommended_market: string | null
           recommended_selection: string | null
@@ -59,6 +60,7 @@ export type Database = {
           kickoff?: string | null
           local_date: string
           match_id: string
+          provisional?: boolean
           reasoning?: string | null
           recommended_market?: string | null
           recommended_selection?: string | null
@@ -87,6 +89,7 @@ export type Database = {
           kickoff?: string | null
           local_date?: string
           match_id?: string
+          provisional?: boolean
           reasoning?: string | null
           recommended_market?: string | null
           recommended_selection?: string | null
