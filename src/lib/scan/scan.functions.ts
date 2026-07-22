@@ -152,6 +152,7 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
             fixturesCount: latest.fixtures_count,
             apiCalls: latest.api_calls ?? 0,
             durationMs: latest.duration_ms ?? null,
+            stageStats: latest.stage_stats ?? null,
           }
         : null,
       degraded: isDegraded,
