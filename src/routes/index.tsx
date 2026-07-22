@@ -219,6 +219,10 @@ function Diagnostics({
   summary: ReturnType<typeof useQuery<Awaited<ReturnType<typeof getTodayScanSummary>>>>["data"] | undefined;
 }) {
   const latest = summary?.latest;
+  const ss = latest?.stageStats as
+    | { fetched?: number; afterStatus?: number; afterDate?: number; oddsOk?: number; oddsError?: number; scored?: number }
+    | null
+    | undefined;
   return (
     <div className="flex flex-col gap-1 text-[11px] text-text-disabled">
       <div className="flex items-center justify-between">
@@ -231,6 +235,11 @@ function Diagnostics({
           {latest ? `${latest.fixturesCount} fixtures · ${latest.apiCalls} API calls` : ""}
         </span>
       </div>
+      {ss ? (
+        <div className="caption-mono">
+          Pipeline: fetched {ss.fetched ?? 0} → pending {ss.afterStatus ?? 0} → today {ss.afterDate ?? 0} → odds ok {ss.oddsOk ?? 0} (err {ss.oddsError ?? 0}) → scored {ss.scored ?? 0}
+        </div>
+      ) : null}
     </div>
   );
 }
