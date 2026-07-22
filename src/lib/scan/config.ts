@@ -72,4 +72,6 @@ export const SCAN = {
   maxEvents: 30,
   // Which sports to include. Narrowed to football until quota picture is clearer.
   sports: ["football"] as const,
+  // Bookmakers to query. Plan currently allows max 2 (Bet365 + Novibet).
+  bookmakers: ["Bet365", "Novibet"] as const,
 };
