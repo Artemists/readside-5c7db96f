@@ -35,10 +35,30 @@ export async function listEvents(
 ): Promise<EventListItem[]> {
   const url = `${BASE}/events?sport=${encodeURIComponent(sport)}&apiKey=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) return [];
-  const body = (await res.json()) as RawEvent[] | { events?: RawEvent[] };
-  const list = Array.isArray(body) ? body : (body.events ?? []);
-  return list.map((e) => ({
+  if (!res.ok) {
+    console.error(`listEvents ${sport}: HTTP ${res.status}`);
+    return [];
+  }
+  const body = (await res.json()) as
+    | RawEvent[]
+    | { events?: RawEvent[]; error?: string };
+  if (!Array.isArray(body)) {
+    if (body && "error" in body && body.error) {
+      console.error(`listEvents ${sport}: ${body.error}`);
+    }
+    const nested = (body as { events?: RawEvent[] }).events;
+    if (!Array.isArray(nested)) return [];
+    return nested.map((e) => ({
+      id: String(e.id),
+      sport: pickName(e.sport) ?? sport,
+      league: pickName(e.league),
+      home: e.home,
+      away: e.away,
+      date: e.date,
+      status: e.status,
+    }));
+  }
+  return body.map((e) => ({
     id: String(e.id),
     sport: pickName(e.sport) ?? sport,
     league: pickName(e.league),
