@@ -370,10 +370,11 @@ export function scoreEvent(event: OddsEvent): ScoredMatch {
     evPercent: val.evPercent,
     reasoning,
     signals: {
-      context: { score: ctx.score, note: ctx.note },
+      context: { score: ctx.score, note: ctx.note, tier: ctx.tier },
       explosion: { score: exp.score, note: exp.note },
-      value: { score: val.score, note: val.note },
+      value: { score: val.score, note: val.note, audit: val.audit },
       trap: { score: trap.score, note: trap.note },
     },
+
   };
 }
