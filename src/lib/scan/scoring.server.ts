@@ -264,30 +264,32 @@ function evaluateMoneyline(quotes: MLQuote[]): EvaluatedMarket {
   };
 }
 
-function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
-  if (totals.length === 0) return null;
-  // Group by line — de-vig only makes sense within the same line.
+function evaluateOverUnder(
+  quotes: TotalsQuote[],
+  market: MarketName,
+  unitLabel: string,
+): EvaluatedMarket | null {
+  if (quotes.length === 0) return null;
   const byLine = new Map<number, TotalsQuote[]>();
-  for (const t of totals) {
+  for (const t of quotes) {
     const arr = byLine.get(t.line) ?? [];
     arr.push(t);
     byLine.set(t.line, arr);
   }
-  // Prefer the line with the most books.
   const [line, group] = [...byLine.entries()].sort((a, b) => b[1].length - a[1].length)[0];
   const perBookOdds = group.map((t) => [t.over, t.under]);
   const rawAudits = evaluateSelections(["over", "under"] as const, perBookOdds, group.map((t) => t.book));
-  // Relabel selections to "Over N"/"Under N" for downstream display.
   const audits = rawAudits.audits.map((a) => ({
     ...a,
-    selection: (a.selection === "over" ? `Over ${line}` : `Under ${line}`) as SelectionAudit["selection"],
+    selection: (a.selection === "over"
+      ? `Over ${line} ${unitLabel}`
+      : `Under ${line} ${unitLabel}`) as SelectionAudit["selection"],
   }));
   const eligibleAudits = audits.filter((a) => a.eligible);
   const eligibleWinner = eligibleAudits.length ? eligibleAudits.reduce((a, b) => (a.evPct > b.evPct ? a : b)) : null;
   const fallbackByEv = audits.length ? audits.reduce((a, b) => (a.evPct > b.evPct ? a : b)) : null;
-
   return {
-    market: "Total goals",
+    market,
     selections: audits,
     eligibleWinner,
     fallbackByEv,
@@ -295,6 +297,18 @@ function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
     hasDraw: false,
     extra: { line },
   };
+}
+
+function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
+  return evaluateOverUnder(totals, "Total goals", "goals");
+}
+
+function evaluateCorners(quotes: TotalsQuote[]): EvaluatedMarket | null {
+  return evaluateOverUnder(quotes, "Total corners", "corners");
+}
+
+function evaluateCards(quotes: TotalsQuote[]): EvaluatedMarket | null {
+  return evaluateOverUnder(quotes, "Total cards", "cards");
 }
 
 function buildValueResult(
