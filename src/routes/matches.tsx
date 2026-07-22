@@ -50,7 +50,7 @@ function MatchesPage() {
   });
 
   const title = verdict
-    ? { opportunity: "Opportunities", trap: "Traps", ignore: "Ignore" }[verdict]
+    ? ({ opportunity: "Opportunities", trap: "Traps", ignore: "Ignore" } as const)[verdict]
     : "All matches";
 
   return (
