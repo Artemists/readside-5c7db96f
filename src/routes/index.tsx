@@ -212,31 +212,10 @@ function MorningBriefing() {
           <>
             <Divider />
             <SectionLabel>Top edge</SectionLabel>
-            <Link
-              to="/match/$matchId"
-              params={{ matchId: s.topEdge.match_id }}
-              className="flex flex-col gap-2 rounded-[10px] bg-card-inner p-4"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-[15px] font-semibold text-text-primary">
-                  {s.topEdge.home} · {s.topEdge.away}
-                </span>
-                <span className="shrink-0 text-[22px] font-bold leading-none text-accent">
-                  {s.topEdge.ev_percent != null
-                    ? `${Number(s.topEdge.ev_percent).toFixed(1)}%`
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-[12px] text-text-muted">
-                <span className="min-w-0 truncate">
-                  {s.topEdge.recommended_market ?? "Moneyline"} · {s.topEdge.recommended_selection ?? "—"}
-                  {s.topEdge.best_odds != null ? ` @ ${Number(s.topEdge.best_odds).toFixed(2)}` : ""}
-                </span>
-                <VerdictChip verdict="opportunity" />
-              </div>
-            </Link>
+            <MatchCard m={s.topEdge as never} />
           </>
         ) : null}
+
 
         {/* Coming up */}
         {groupedUpcoming.length > 0 ? (
