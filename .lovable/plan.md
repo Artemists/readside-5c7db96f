@@ -1,92 +1,100 @@
 
-# BetLab v1 — Build plan
+# Home screen: real scan engine + live data
 
-Project is currently the blank Lovable template. I'll build BetLab from scratch using the Figma as the visual source of truth and the odds integrations from your prompt. Backend uses TanStack Start server functions (same security model as Supabase Edge Functions — keys stay server-side; no key ever ships to the browser). I'll call these "server functions" internally but they play the same role as your existing `football-data` edge function.
+## Current state (verified against the repo)
 
-## What I'll build in this pass
+- **Supabase / Lovable Cloud is NOT enabled on this project.** There is no `supabase/` folder, no migrations, no tables, no edge functions. Your prompt refers to "an existing `football-data` edge function using API-Football" — that does not exist in this codebase. What exists is a TanStack Start server function `getNovibetOdds` (`src/lib/odds/novibet.server.ts`) that calls **odds-api.io** (Novibet bookmaker), using the `ODDS_API_IO_KEY` secret. No API-Football key, no fixtures source, no persistence.
+- **9-signal scoring logic does not exist.** `src/lib/nine-signal.ts` is a hardcoded fixture map of 3 demo matches with fake `assessmentPercent` values and 9 boolean labels ("Home form", "xG differential", "Rest days", "Rotation risk", "Set-piece edge", "Referee tendency", "Line movement", "Public %", "Sharp %"). These labels also don't match the 9 signals you listed in the prompt (tournament fitness, public tax, goals, altitude/climate, motivation, EV/odds value, H2H — that's 7, not 9). Needs to be written from scratch, and the signal list needs to be nailed down first.
+- **Home screen** (`src/routes/index.tsx`) renders a static greeting, a hardcoded "High uncertainty day" warning, three fixed bullets, and three `StatCard`s whose numbers come from a deterministic per-day hash of the Athens date — they change at midnight but they are not real. No "Models updated 4m ago" line is currently rendered; it may be from an older screenshot. Nothing is tappable, nothing hits a backend.
+- **Match universe:** `src/lib/matches.ts` hardcodes 3 WC26 fixtures. There is no live fixtures feed.
 
-### 1. Design system (from Figma)
-Port these tokens to `src/styles.css` as oklch semantic tokens:
-- Backgrounds: `bg/page #04101c`, `bg/card #12283f`, `bg/card-inner #0b1b2e`
-- Text: `text/primary #f5f8fa`, `text/secondary #aebecc`, `text/muted #7c93a8`, `text/disabled #5a7085`
-- Border: `border/divider #16304b`
-- Accent: `accent/volt #c6f135`, `accent/volt-dim #9fc71f`
-- Fonts (loaded via `<link>` in `__root.tsx` head): Space Grotesk (display), Archivo (body), IBM Plex Mono (labels/captions)
-- Type scale + spacing per Figma spec (Title 36/44 -1.2, Section Label 11/16 +1.2 uppercase, Body 15/22, Value 32/40, Caption mono 13/18)
-- Shared primitives: `Card`, `SectionLabel`, `Divider`, `Badge`, `Bullet`, `StatCard`, `Pill`, `ProgressBar`, `KeyValueRow`, `NavBar`, `Footer`
+## What I need clarified before building
 
-### 2. Screens from Figma (routes)
-- `/` — **Morning Briefing** (Good morning, today's market conditions, badge, bullets, 3 stat cards)
-- `/goal-explosion` — **Goal Explosion** (match + score, markets, edge)
-- `/match-intelligence` — **Why Should I Trust This** (key/value rows, attack/defense/tempo bars, interesting/avoid lists)
-- `/popular-pick-warning` — **Popular Pick Warning** (Public confidence % + BetLab assessment %, bullets, verdict)
-- `/yesterday` — **Yesterday's Analysis** (recap, hit rate 4/6, insight)
+1. **Fixtures source.** You mention API-Football but it isn't wired. Options:
+   a. Add API-Football (you'd supply `API_FOOTBALL_KEY`); scan pulls today's WC26 (or all football) fixtures from it.
+   b. Reuse odds-api.io `/events?sport=football` as the fixtures list (already working, no new key needed) and scan every event with Novibet odds today.
+   c. Keep the static `WC26_MATCHES` list for now and only enrich with odds.
+   Pick one — this drives everything.
+2. **Signal set.** Your prompt lists 7 things ("tournament fitness, public pressure, goals signals, altitude/climate, motivation, EV/odds value, head-to-head history"). To ship "9-signal", I need the other 2 (candidates: rest days, injuries/rotation, home advantage, form, market movement, sharp %). I'll propose a set in the plan but you should confirm.
+3. **Verdict thresholds.** What EV/composite score turns a match into Opportunity vs Trap vs Ignore? Proposed defaults: Opportunity = EV ≥ +5% AND composite ≥ 60; Trap = public tax high AND EV ≤ −3%; else Ignore. Confirm or tweak.
+4. **"Stale" definition for auto-rescan on launch.** Proposed: run automatically if the most recent scan for today (Athens time) is older than 30 min or missing.
+5. **Enable Lovable Cloud?** Persistence, the rescan button, and per-match detail all need a DB. I'll enable it in the build step unless you object.
 
-Nav Bar tabs: Signals · Analysis · History (mapped to routes above).
+## Proposed plan (once the above is answered)
 
-### 3. Additional tabs called out in your prompt (not in Figma)
-Minimal but functional shells matching the design language, so the odds wiring has somewhere to live:
-- `/value-scanner` — **Value Scanner** table: match, Novibet odds (live from `novibet-odds`), implied prob, Edge %, EV. Existing math preserved as pure functions in `src/lib/value.ts`.
-- Popular Pick Warning wired to `consensus-odds` for Public confidence %.
-- 9-signal model as a pure stub in `src/lib/nine-signal.ts` returning BetLab assessment % (you can drop your real logic in later — I won't touch its output shape).
+### Step 1 — Enable Lovable Cloud and create schema
 
-I will **not** build wizard / bet log / leaderboard in this pass unless you say so — that would double the scope. Say the word and I'll add them next.
-
-### 4. Odds integrations (the core ask)
-
-Two server functions with the same pattern as `football-data`:
-
-**`getNovibetOdds({ matchId | teams, date })`** → `src/lib/odds/novibet.functions.ts`
-- Reads `ODDS_API_IO_KEY` from server env inside `.handler()`
-- Calls odds-api.io, filters bookmaker = Novibet
-- Returns `{ status: "ok", home, draw, away, spread, totals, market, updatedAt }` or `{ status: "no_odds_available" }`
-
-**`getConsensusOdds({ matchId | teams, date })`** → `src/lib/odds/consensus.functions.ts`
-- Reads `SPORTSGAMEODDS_KEY` from server env inside `.handler()`
-- Returns `{ consensus: { home, draw, away }, kalshi: number|null, polymarket: number|null, updatedAt }`
-
-**Client:**
-- TanStack Query with a session cache (`staleTime: Infinity`, key = match id) — same "don't burn quota" pattern
-- Loading spinner (accent/volt small ring)
-- Greek error toast: «Δεν ήταν δυνατή η φόρτωση αποδόσεων»
-- Fallback: if novibet returns `no_odds_available`, Value Scanner shows consensus odds with a small mono label «Μέση αγοράς» ("market average")
-
-### 5. Secrets
-I'll wire the code to read `ODDS_API_IO_KEY` and `SPORTSGAMEODDS_KEY`. **You add both in Project Settings → Secrets before the endpoints will work** (I'll prompt via `add_secret` once code is in). Keys never appear in the client bundle.
-
-### 6. Content language
-UI labels stay Greek where your prompt implies they already are (error message, "Μέση αγοράς"). Section headings from the Figma stay English as designed (`TODAY'S MARKET CONDITIONS`, `Public confidence`, etc.) — say the word if you want everything localized.
-
-## Technical notes
+Two tables:
 
 ```text
-src/
-  styles.css                        design tokens (oklch) + fonts
-  routes/
-    __root.tsx                       fonts <link>, NavBar, Footer, <Outlet/>
-    index.tsx                        Morning Briefing
-    goal-explosion.tsx
-    match-intelligence.tsx
-    popular-pick-warning.tsx
-    yesterday.tsx
-    value-scanner.tsx
-  components/betlab/                 Card, SectionLabel, Badge, Bullet, StatCard, ProgressBar, KeyValueRow, NavBar, Footer, Spinner
-  lib/
-    odds/
-      novibet.functions.ts           createServerFn — ODDS_API_IO_KEY
-      consensus.functions.ts         createServerFn — SPORTSGAMEODDS_KEY
-      types.ts
-    value.ts                         edge %, EV, implied prob (pure)
-    nine-signal.ts                   stub returning BetLab assessment
-    i18n.ts                          Greek strings
+scans
+  id                  uuid pk
+  scanned_at          timestamptz not null default now()
+  local_date          date not null                 -- Athens-local YYYY-MM-DD
+  fixtures_count      int not null
+  duration_ms         int
+  status              text not null                 -- 'ok' | 'partial' | 'failed'
+
+match_signals
+  id                  uuid pk
+  scan_id             uuid references scans(id) on delete cascade
+  local_date          date not null
+  match_id            text not null                 -- odds-api eventId (string)
+  home                text not null
+  away                text not null
+  kickoff             timestamptz
+  competition         text
+  verdict             text not null                 -- 'opportunity' | 'trap' | 'ignore'
+  ev_percent          numeric(6,2)                  -- best EV across markets
+  edge_percent        numeric(6,2)
+  best_market         text                          -- 'home' | 'draw' | 'away' | 'over' | 'under' | ...
+  best_odds           numeric(6,3)
+  fair_probability    numeric(5,4)
+  composite_score     numeric(5,2)                  -- 0..100
+  signals             jsonb not null                -- { tournament_fitness: {score, note}, public_tax: {...}, ... }
+  unique (local_date, match_id)
 ```
 
-Nothing touches wizard / bet log / leaderboard / 9-signal internals — those aren't in the repo yet, and when they arrive later the odds fetchers plug in unchanged.
+RLS: read-only to `anon` and `authenticated` for both tables (the app is read-only from the browser). Writes happen only through the server function via the service role. Grants added explicitly per project convention.
 
-## Out of scope for this pass (call out if you want any of these added)
-- Wizard, bet log, leaderboard tabs
-- Real 9-signal model logic (stub only)
-- Auth / user accounts / Lovable Cloud
-- Persistent history (Yesterday's Analysis uses static demo copy from the Figma)
+### Step 2 — Scan engine (TanStack server function, not Supabase Edge Function)
 
-Reply "go" (or edit the plan) and I'll build it.
+This project runs on TanStack Start on Cloudflare Workers. Adding a Supabase Edge Function here is wrong — the convention is `createServerFn` for app-internal server logic. Same security model (keys server-side), but native to the stack.
+
+- `runDailyScan()` server function (`src/lib/scan/scan.functions.ts`) with `.middleware([requireSupabaseAuth])` off (this is a public trigger from the Home screen; we rate-limit by checking last scan timestamp instead). Steps: pull today's fixtures, for each fixture pull Novibet odds via existing `fetchNovibetOdds`, run each signal, compute composite + EV, assign verdict, upsert into `match_signals`, insert `scans` row.
+- Signals implemented in `src/lib/signals/*.server.ts`, each exporting `score(match, odds, context) -> { score: 0..100, note: string }`. Composite = weighted mean. Weights defined in one place.
+- `getTodayScanSummary()` server function: returns `{ counts: {opportunities, traps, ignore}, lastScanAt, topEdge }` for the Home screen.
+- `getMatchSignals(matchId)` for the detail route.
+- `listByVerdict(verdict)` for the tappable card destinations.
+
+### Step 3 — Home screen wiring (`src/routes/index.tsx`)
+
+- Loader primes `queryClient.ensureQueryData` for `getTodayScanSummary()`.
+- On mount, if `lastScanAt` is missing or > 30 min old, auto-invoke `runDailyScan()` once.
+- **Rescan button** (top-right of the header block): idle → "Scanning…" with spinner, disabled, on completion invalidate the summary query and show `Last scan: HH:mm` (Athens). Error toast in Greek on failure.
+- **StatCards become `<Link>`s** to `/matches?verdict=opportunity|trap|ignore`, showing real counts (including 0 states).
+- **Top Edge Preview**: new card below the three stats showing single highest-EV match (teams, market, EV%, verdict chip). Links to `/match/$matchId`. Hidden entirely when no matches.
+- **Market conditions block**: computed live — e.g. "Thin edges today (avg %)" if mean absolute EV < 2%, "Elevated draw probability" if avg draw implied prob > 30%, else the whole block is hidden (no fake copy). Bullets are derived from the same data.
+
+### Step 4 — Match detail route `/match/$matchId`
+
+- Full 9-signal breakdown (each signal name + 0–100 score + short note).
+- Odds table: Novibet decimal → implied prob → fair prob → edge %.
+- Suggested unit sizing: Kelly-lite: `units = clamp(0.25 * (fair - implied) / (1 - implied), 0, 3)` (proposal — confirm).
+- Error/notFound/pending components per project convention.
+
+### Step 5 — Verdict-filtered list `/matches?verdict=...`
+
+Simple list of today's matches filtered by the URL search param (validated with Zod), reusing existing card primitives. Empty state included.
+
+## Notes on things I will NOT touch
+
+Wizard, bet log, leaderboard, `nine-signal.ts` output shape used by `popular-pick-warning.tsx` / `goal-explosion.tsx` / `match-intelligence.tsx` (those keep working off the existing stub) unless you tell me to replace them too. Value Scanner keeps its current odds source.
+
+## Please answer
+
+1. Fixtures source (a / b / c above)?
+2. Confirm the 9 signals — which two rounding out your list of 7?
+3. Verdict thresholds — accept the defaults?
+4. Auto-rescan staleness — 30 min OK?
+5. OK to enable Lovable Cloud now?
