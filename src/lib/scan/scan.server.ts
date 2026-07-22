@@ -155,33 +155,41 @@ export async function runScanNow() {
   }
 
   if (scored.length > 0) {
-    const rows = scored.map((s) => ({
-      scan_id: scan.id,
-      local_date: localDate,
-      match_id: s.event.id,
-      sport: s.event.sport,
-      competition: s.event.competition,
-      home: s.event.home,
-      away: s.event.away,
-      kickoff: s.event.kickoff,
-      verdict: s.verdict,
-      context_score: s.contextScore,
-      explosion_score: s.explosionScore,
-      value_score: s.valueScore,
-      trap_score: s.trapScore,
-      confidence: s.confidence,
-      stake: s.stake,
-      recommended_market: s.recommendedMarket,
-      recommended_selection: s.recommendedSelection,
-      best_odds: s.bestOdds,
-      fair_probability: s.fairProbability,
-      implied_probability: s.impliedProbability,
-      edge_percent: s.edgePercent,
-      ev_percent: s.evPercent,
-      reasoning: s.reasoning,
-      signals: s.signals as never,
-      updated_at: new Date().toISOString(),
-    }));
+    const rows = scored.map((s) => {
+      const koMs = s.event.kickoff ? new Date(s.event.kickoff).getTime() : NaN;
+      const rowLocalDate = Number.isFinite(koMs)
+        ? athensLocalDate(new Date(koMs))
+        : localDate;
+      const provisional = Number.isFinite(koMs) ? koMs > provisionalCutoffMs : false;
+      return {
+        scan_id: scan.id,
+        local_date: rowLocalDate,
+        match_id: s.event.id,
+        sport: s.event.sport,
+        competition: s.event.competition,
+        home: s.event.home,
+        away: s.event.away,
+        kickoff: s.event.kickoff,
+        verdict: s.verdict,
+        context_score: s.contextScore,
+        explosion_score: s.explosionScore,
+        value_score: s.valueScore,
+        trap_score: s.trapScore,
+        confidence: s.confidence,
+        stake: s.stake,
+        recommended_market: s.recommendedMarket,
+        recommended_selection: s.recommendedSelection,
+        best_odds: s.bestOdds,
+        fair_probability: s.fairProbability,
+        implied_probability: s.impliedProbability,
+        edge_percent: s.edgePercent,
+        ev_percent: s.evPercent,
+        reasoning: s.reasoning,
+        signals: s.signals as never,
+        provisional,
+        updated_at: new Date().toISOString(),
+      };
+    });
     const { error: rowsErr } = await supabaseAdmin
       .from("match_signals")
       .upsert(rows, { onConflict: "local_date,match_id" });
