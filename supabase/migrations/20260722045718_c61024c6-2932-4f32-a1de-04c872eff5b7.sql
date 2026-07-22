@@ -1,0 +1,1 @@
+UPDATE public.scans SET scanned_at = now() - interval '2 hours' WHERE local_date = (now() AT TIME ZONE 'Europe/Athens')::date;
