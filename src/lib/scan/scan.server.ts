@@ -68,8 +68,10 @@ export async function runScanNow() {
     }
   }
 
-  // Cap to protect quota.
+  // Prioritise higher-tier competitions before capping (quota control).
+  allEvents.sort((a, b) => competitionTier(b.league) - competitionTier(a.league));
   const events = allEvents.slice(0, SCAN.maxEvents);
+
 
   // Pre-fetch existing fresh signals so we can skip re-fetching their odds.
   const freshCutoff = new Date(Date.now() - SCAN.eventFreshMinutes * 60_000).toISOString();
