@@ -265,8 +265,10 @@ function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
     ...a,
     selection: (a.selection === "over" ? `Over ${line}` : `Under ${line}`) as SelectionAudit["selection"],
   }));
-  const eligibleWinner = audits.find((a) => a.eligible && rawAudits.eligibleWinner && a.evPct === rawAudits.eligibleWinner.evPct) ?? null;
+  const eligibleAudits = audits.filter((a) => a.eligible);
+  const eligibleWinner = eligibleAudits.length ? eligibleAudits.reduce((a, b) => (a.evPct > b.evPct ? a : b)) : null;
   const fallbackByEv = audits.length ? audits.reduce((a, b) => (a.evPct > b.evPct ? a : b)) : null;
+
   return {
     market: "Total goals",
     selections: audits,
