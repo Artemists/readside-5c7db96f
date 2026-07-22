@@ -91,11 +91,13 @@ export async function runScanNow() {
   // 2) Fetch odds + score (skip fresh ones).
   const scored: ScoredMatch[] = [];
   let reused = 0;
+  let diagLogged = 0;
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
       continue;
     }
+
     try {
       apiCalls++;
       const { event: odds, status } = await fetchOddsForEvent(
