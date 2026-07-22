@@ -106,16 +106,18 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
       .limit(1)
       .maybeSingle<ScanRow & { duration_ms: number | null; stage_stats: Record<string, number> | null }>();
 
-    // Latest successful scan (ok or partial) — used for displayed counts
-    // when latest is rate_limited/failed.
+    // Latest successful scan (ok or partial with real fixtures) — used for
+    // displayed counts when latest is rate_limited/failed/empty.
     const { data: lastOkArr } = await supabaseAdmin
       .from("scans")
       .select("id, scanned_at, fixtures_count, status, api_calls")
       .eq("local_date", today)
       .in("status", ["ok", "partial"])
+      .gt("fixtures_count", 0)
       .order("scanned_at", { ascending: false })
       .limit(1);
     const lastOk = (lastOkArr?.[0] ?? null) as ScanRow | null;
+
 
     // Signals for today (from whatever scans have run today).
     const { data: rows } = await supabaseAdmin
