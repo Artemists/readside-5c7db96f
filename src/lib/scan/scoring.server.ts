@@ -142,7 +142,7 @@ function explosionScore(
 // -------------------- Value (0..100) --------------------
 type BookQuote = { book: string; odds: number; implied: number };
 type SelectionAudit = {
-  selection: "home" | "draw" | "away";
+  selection: string;
   quotes: BookQuote[];
   fairProb: number;
   bestOdds: number;
@@ -153,6 +153,7 @@ type SelectionAudit = {
   eligible: boolean;
   disqualifier: string | null;
 };
+
 type ValueResult = {
   score: number;
   edgePercent: number | null;
