@@ -2,16 +2,33 @@ import type { OddsEvent } from "./types";
 
 const BASE = "https://api.odds-api.io/v3";
 
-type EventListItem = {
+type RawEvent = {
   id: number | string;
-  sport?: string;
+  sport?: string | { name?: string; slug?: string };
+  league?: string | { name?: string; slug?: string };
+  home: string;
+  away: string;
+  date?: string;
+  status?: string;
+};
+
+export type EventListItem = {
+  id: string;
+  sport: string;
   league?: string;
   home: string;
   away: string;
   date?: string;
+  status?: string;
 };
 
-/** List events for a sport within the next few days (default 14d). */
+function pickName(v: RawEvent["sport"] | RawEvent["league"]): string | undefined {
+  if (!v) return undefined;
+  if (typeof v === "string") return v;
+  return v.name ?? v.slug;
+}
+
+/** List events for a sport (odds-api.io returns next ~14d, mixed statuses). */
 export async function listEvents(
   sport: string,
   apiKey: string,
@@ -19,9 +36,17 @@ export async function listEvents(
   const url = `${BASE}/events?sport=${encodeURIComponent(sport)}&apiKey=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, { headers: { accept: "application/json" } });
   if (!res.ok) return [];
-  const body = (await res.json()) as EventListItem[] | { events?: EventListItem[] };
+  const body = (await res.json()) as RawEvent[] | { events?: RawEvent[] };
   const list = Array.isArray(body) ? body : (body.events ?? []);
-  return list.map((e) => ({ ...e, sport: e.sport ?? sport }));
+  return list.map((e) => ({
+    id: String(e.id),
+    sport: pickName(e.sport) ?? sport,
+    league: pickName(e.league),
+    home: e.home,
+    away: e.away,
+    date: e.date,
+    status: e.status,
+  }));
 }
 
 /** Fetch odds for a single event across all bookmakers. */
