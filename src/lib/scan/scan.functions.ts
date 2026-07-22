@@ -123,7 +123,7 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
     const { data: rows } = await supabaseAdmin
       .from("match_signals")
       .select(
-        "verdict, ev_percent, edge_percent, fair_probability, implied_probability, best_odds, home, away, match_id, recommended_market, recommended_selection, competition, sport, kickoff, value_score, trap_score, context_score, explosion_score, confidence, stake, provisional",
+        "verdict, ev_percent, edge_percent, fair_probability, implied_probability, best_odds, home, away, match_id, recommended_market, recommended_selection, competition, sport, kickoff, value_score, trap_score, context_score, explosion_score, confidence, stake, provisional, signals",
       )
       .eq("local_date", today);
 
@@ -139,9 +139,16 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
 
     const topEdge = hasSuccessfulScan
       ? list
-          .filter((r) => r.ev_percent != null)
+          .filter((r) => {
+            if (r.verdict !== "opportunity") return false;
+            if (r.ev_percent == null) return false;
+            const dq = (r.signals as { value?: { audit?: { disqualifier?: string | null } } } | null)
+              ?.value?.audit?.disqualifier;
+            return dq == null;
+          })
           .sort((a, b) => Number(b.ev_percent) - Number(a.ev_percent))[0] ?? null
       : null;
+
 
     const withEv = list.filter((r) => r.ev_percent != null).map((r) => Number(r.ev_percent));
     const avgAbsEv = withEv.length

@@ -52,6 +52,14 @@ function decisionPhrase(m: MatchCardData): string {
   const market = (m.recommended_market ?? "").toLowerCase();
   const sel = m.recommended_selection ?? "";
   if (!sel) return "Awaiting selection";
+  if (market.includes("total") || market.includes("over") || market.includes("under")) {
+    const match = sel.match(/^(over|under)\s*([\d.]+)/i);
+    if (match) {
+      const side = match[1][0].toUpperCase() + match[1].slice(1).toLowerCase();
+      return `${side} ${match[2]} goals`;
+    }
+    return sel;
+  }
   if (market.includes("moneyline") || market === "ml" || market === "h2h" || market === "") {
     const s = sel.toLowerCase();
     if (s === "home" || s === m.home.toLowerCase()) return `Back ${m.home}`;
@@ -59,11 +67,9 @@ function decisionPhrase(m: MatchCardData): string {
     if (s === "draw" || s === "x") return "Back the draw";
     return `Back ${sel}`;
   }
-  if (market.includes("over") || market.includes("under") || market.includes("total")) {
-    return sel.match(/^(over|under)/i) ? sel.replace(/^./, (c) => c.toUpperCase()) : `${sel} goals`;
-  }
   return sel;
 }
+
 
 function VerdictChip({ verdict, muted }: { verdict: string; muted: boolean }) {
   const label =
