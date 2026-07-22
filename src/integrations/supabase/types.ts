@@ -117,6 +117,7 @@ export type Database = {
           id: string
           local_date: string
           scanned_at: string
+          stage_stats: Json
           status: string
         }
         Insert: {
@@ -126,6 +127,7 @@ export type Database = {
           id?: string
           local_date: string
           scanned_at?: string
+          stage_stats?: Json
           status?: string
         }
         Update: {
@@ -135,6 +137,7 @@ export type Database = {
           id?: string
           local_date?: string
           scanned_at?: string
+          stage_stats?: Json
           status?: string
         }
         Relationships: []
