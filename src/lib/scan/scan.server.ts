@@ -27,7 +27,7 @@ export async function runScanNow() {
     else if (s === "failed") sawFailure = true;
   };
 
-  // 1) Pull events across sports, filter to today (Athens-local).
+  // 1) Pull events across sports, filter to the upcoming kickoff window.
   const stage = {
     fetched: 0,
     afterStatus: 0,
@@ -36,6 +36,9 @@ export async function runScanNow() {
     oddsError: 0,
     scored: 0,
   };
+  const nowMs = Date.now();
+  const windowEndMs = nowMs + SCAN.windowHours * 3_600_000;
+  const provisionalCutoffMs = nowMs + SCAN.provisionalAfterHours * 3_600_000;
   const allEvents: Array<{
     id: string;
     sport: string;
@@ -53,8 +56,8 @@ export async function runScanNow() {
       // Real values seen: "pending" (upcoming), "settled", "cancelled", "live".
       if (e.status && e.status !== "pending") continue;
       stage.afterStatus++;
-      const d = e.date ? athensLocalDate(new Date(e.date)) : null;
-      if (d && d === localDate) {
+      const t = e.date ? new Date(e.date).getTime() : NaN;
+      if (Number.isFinite(t) && t >= nowMs && t <= windowEndMs) {
         stage.afterDate++;
         allEvents.push({
           id: String(e.id),
@@ -74,12 +77,12 @@ export async function runScanNow() {
 
 
   // Pre-fetch existing fresh signals so we can skip re-fetching their odds.
-  const freshCutoff = new Date(Date.now() - SCAN.eventFreshMinutes * 60_000).toISOString();
+  // Freshness is by match_id across the whole window (matches can span days).
+  const freshCutoff = new Date(nowMs - SCAN.eventFreshMinutes * 60_000).toISOString();
   const { data: freshRows } = events.length
     ? await supabaseAdmin
         .from("match_signals")
         .select("match_id, updated_at")
-        .eq("local_date", localDate)
         .in("match_id", events.map((e) => e.id))
         .gte("updated_at", freshCutoff)
     : { data: [] as Array<{ match_id: string; updated_at: string }> };
