@@ -52,11 +52,25 @@ function decisionPhrase(m: MatchCardData): string {
   const market = (m.recommended_market ?? "").toLowerCase();
   const sel = m.recommended_selection ?? "";
   if (!sel) return "Awaiting selection";
-  if (market.includes("total") || market.includes("over") || market.includes("under")) {
-    const match = sel.match(/^(over|under)\s*([\d.]+)/i);
-    if (match) {
-      const side = match[1][0].toUpperCase() + match[1].slice(1).toLowerCase();
-      return `${side} ${match[2]} goals`;
+  const ouMatch = sel.match(/^(over|under)\s*([\d.]+)/i);
+  if (market.includes("corner")) {
+    if (ouMatch) {
+      const side = ouMatch[1][0].toUpperCase() + ouMatch[1].slice(1).toLowerCase();
+      return `${side} ${ouMatch[2]} corners`;
+    }
+    return sel;
+  }
+  if (market.includes("card")) {
+    if (ouMatch) {
+      const side = ouMatch[1][0].toUpperCase() + ouMatch[1].slice(1).toLowerCase();
+      return `${side} ${ouMatch[2]} cards`;
+    }
+    return sel;
+  }
+  if (market.includes("total") || market.includes("over") || market.includes("under") || market.includes("goal")) {
+    if (ouMatch) {
+      const side = ouMatch[1][0].toUpperCase() + ouMatch[1].slice(1).toLowerCase();
+      return `${side} ${ouMatch[2]} goals`;
     }
     return sel;
   }
