@@ -9,6 +9,7 @@ type ScanRow = {
   fixtures_count: number;
   status: string;
   api_calls?: number | null;
+  stage_stats?: Record<string, number> | null;
 };
 
 /**
