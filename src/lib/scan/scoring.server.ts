@@ -438,10 +438,18 @@ function buildReasoning(
 export function scoreEvent(event: OddsEvent): ScoredMatch {
   const quotes = extractMoneylines(event);
   const totalsQuotes = extractTotals(event);
+  const cornersQuotes = extractCorners(event);
+  const cardsQuotes = extractCards(event);
   const ctx = contextScore(event);
   const mlMarket = evaluateMoneyline(quotes);
   const totalsMarket = evaluateTotals(totalsQuotes);
-  const val = buildValueResult([mlMarket, ...(totalsMarket ? [totalsMarket] : [])]);
+  const cornersMarket = evaluateCorners(cornersQuotes);
+  const cardsMarket = evaluateCards(cardsQuotes);
+  const val = buildValueResult(
+    [mlMarket, totalsMarket, cornersMarket, cardsMarket].filter(
+      (m): m is EvaluatedMarket => m != null && m.selections.length > 0,
+    ),
+  );
   const exp = explosionScore(event, quotes);
   const trap = trapScore(event, quotes);
 
