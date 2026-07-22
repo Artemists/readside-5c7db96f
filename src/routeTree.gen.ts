@@ -9,49 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as YesterdayRouteImport } from './routes/yesterday'
-import { Route as ValueScannerRouteImport } from './routes/value-scanner'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as PopularPickWarningRouteImport } from './routes/popular-pick-warning'
 import { Route as MatchesRouteImport } from './routes/matches'
-import { Route as MatchIntelligenceRouteImport } from './routes/match-intelligence'
-import { Route as GoalExplosionRouteImport } from './routes/goal-explosion'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MatchMatchIdRouteImport } from './routes/match.$matchId'
 
-const YesterdayRoute = YesterdayRouteImport.update({
-  id: '/yesterday',
-  path: '/yesterday',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ValueScannerRoute = ValueScannerRouteImport.update({
-  id: '/value-scanner',
-  path: '/value-scanner',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PopularPickWarningRoute = PopularPickWarningRouteImport.update({
-  id: '/popular-pick-warning',
-  path: '/popular-pick-warning',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MatchesRoute = MatchesRouteImport.update({
   id: '/matches',
   path: '/matches',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MatchIntelligenceRoute = MatchIntelligenceRouteImport.update({
-  id: '/match-intelligence',
-  path: '/match-intelligence',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GoalExplosionRoute = GoalExplosionRouteImport.update({
-  id: '/goal-explosion',
-  path: '/goal-explosion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -67,102 +37,40 @@ const MatchMatchIdRoute = MatchMatchIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/goal-explosion': typeof GoalExplosionRoute
-  '/match-intelligence': typeof MatchIntelligenceRoute
   '/matches': typeof MatchesRoute
-  '/popular-pick-warning': typeof PopularPickWarningRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/value-scanner': typeof ValueScannerRoute
-  '/yesterday': typeof YesterdayRoute
   '/match/$matchId': typeof MatchMatchIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/goal-explosion': typeof GoalExplosionRoute
-  '/match-intelligence': typeof MatchIntelligenceRoute
   '/matches': typeof MatchesRoute
-  '/popular-pick-warning': typeof PopularPickWarningRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/value-scanner': typeof ValueScannerRoute
-  '/yesterday': typeof YesterdayRoute
   '/match/$matchId': typeof MatchMatchIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/goal-explosion': typeof GoalExplosionRoute
-  '/match-intelligence': typeof MatchIntelligenceRoute
   '/matches': typeof MatchesRoute
-  '/popular-pick-warning': typeof PopularPickWarningRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/value-scanner': typeof ValueScannerRoute
-  '/yesterday': typeof YesterdayRoute
   '/match/$matchId': typeof MatchMatchIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/goal-explosion'
-    | '/match-intelligence'
-    | '/matches'
-    | '/popular-pick-warning'
-    | '/sitemap.xml'
-    | '/value-scanner'
-    | '/yesterday'
-    | '/match/$matchId'
+  fullPaths: '/' | '/matches' | '/sitemap.xml' | '/match/$matchId'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/goal-explosion'
-    | '/match-intelligence'
-    | '/matches'
-    | '/popular-pick-warning'
-    | '/sitemap.xml'
-    | '/value-scanner'
-    | '/yesterday'
-    | '/match/$matchId'
-  id:
-    | '__root__'
-    | '/'
-    | '/goal-explosion'
-    | '/match-intelligence'
-    | '/matches'
-    | '/popular-pick-warning'
-    | '/sitemap.xml'
-    | '/value-scanner'
-    | '/yesterday'
-    | '/match/$matchId'
+  to: '/' | '/matches' | '/sitemap.xml' | '/match/$matchId'
+  id: '__root__' | '/' | '/matches' | '/sitemap.xml' | '/match/$matchId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  GoalExplosionRoute: typeof GoalExplosionRoute
-  MatchIntelligenceRoute: typeof MatchIntelligenceRoute
   MatchesRoute: typeof MatchesRoute
-  PopularPickWarningRoute: typeof PopularPickWarningRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  ValueScannerRoute: typeof ValueScannerRoute
-  YesterdayRoute: typeof YesterdayRoute
   MatchMatchIdRoute: typeof MatchMatchIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/yesterday': {
-      id: '/yesterday'
-      path: '/yesterday'
-      fullPath: '/yesterday'
-      preLoaderRoute: typeof YesterdayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/value-scanner': {
-      id: '/value-scanner'
-      path: '/value-scanner'
-      fullPath: '/value-scanner'
-      preLoaderRoute: typeof ValueScannerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -170,32 +78,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/popular-pick-warning': {
-      id: '/popular-pick-warning'
-      path: '/popular-pick-warning'
-      fullPath: '/popular-pick-warning'
-      preLoaderRoute: typeof PopularPickWarningRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/matches': {
       id: '/matches'
       path: '/matches'
       fullPath: '/matches'
       preLoaderRoute: typeof MatchesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/match-intelligence': {
-      id: '/match-intelligence'
-      path: '/match-intelligence'
-      fullPath: '/match-intelligence'
-      preLoaderRoute: typeof MatchIntelligenceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/goal-explosion': {
-      id: '/goal-explosion'
-      path: '/goal-explosion'
-      fullPath: '/goal-explosion'
-      preLoaderRoute: typeof GoalExplosionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -217,25 +104,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  GoalExplosionRoute: GoalExplosionRoute,
-  MatchIntelligenceRoute: MatchIntelligenceRoute,
   MatchesRoute: MatchesRoute,
-  PopularPickWarningRoute: PopularPickWarningRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  ValueScannerRoute: ValueScannerRoute,
-  YesterdayRoute: YesterdayRoute,
   MatchMatchIdRoute: MatchMatchIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
