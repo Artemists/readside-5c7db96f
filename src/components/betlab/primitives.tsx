@@ -61,16 +61,25 @@ export function StatCard({
   icon,
   value,
   label,
+  emphasis = "default",
 }: {
   icon: string;
   value: ReactNode;
   label: string;
+  emphasis?: "accent" | "default";
 }) {
   return (
-    <div className="flex flex-1 flex-col gap-2 rounded-[10px] bg-card-inner p-5">
-      <span className="subtitle-display">{icon}</span>
-      <span className="value-display text-accent">{value}</span>
-      <span className="caption-mono">{label}</span>
+    <div className="flex h-24 flex-1 flex-col justify-between rounded-[10px] bg-card-inner p-3">
+      <span className="text-[16px] leading-none">{icon}</span>
+      <span
+        className={cn(
+          "value-display text-[26px] leading-none",
+          emphasis === "accent" ? "text-accent" : "text-text-primary",
+        )}
+      >
+        {value}
+      </span>
+      <span className="caption-mono text-[11px] leading-none">{label}</span>
     </div>
   );
 }
