@@ -74,9 +74,7 @@ function extractOverUnderBy(
 
 function extractTotals(event: OddsEvent): TotalsQuote[] {
   return extractOverUnderBy(event, (n) =>
-    n === "totals" || n === "over/under" || n === "o/u" ||
-    (n.includes("total") && !n.includes("corner") && !n.includes("card") && !n.includes("booking")) ||
-    (n.includes("over") && n.includes("under") && !n.includes("corner") && !n.includes("card") && !n.includes("booking")),
+    n === "totals" || n === "over/under" || n === "o/u",
   );
 }
 
