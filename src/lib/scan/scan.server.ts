@@ -3,6 +3,12 @@ import { athensLocalDate } from "@/lib/time";
 import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
 import { scoreEvent, competitionTier } from "./scoring.server";
 import type { ScoredMatch } from "./types";
+import { getModelInputs, type ModelFailure } from "@/lib/model/team-form.server";
+import {
+  attackDefenceRates,
+  poissonMatchProbabilities,
+  type MatchProbabilities,
+} from "@/lib/model/rates";
 
 
 type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
@@ -12,6 +18,29 @@ type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
  * four-score model, and upserts everything into the DB in one scan.
  * Reuses per-event stored rows when they were scored within eventFreshMinutes.
  */
+function computeDisagreement(scored: ScoredMatch, probs: MatchProbabilities): number | null {
+  const sel = scored.recommendedSelection;
+  const market = (scored.recommendedMarket ?? "").toLowerCase();
+  const fair = scored.fairProbability;
+  if (!sel || fair == null) return null;
+  let modelP: number | null = null;
+  if (market.includes("moneyline") || market === "" || market === "ml") {
+    const s = sel.toLowerCase();
+    if (s === "home") modelP = probs.homeWin;
+    else if (s === "draw") modelP = probs.draw;
+    else if (s === "away") modelP = probs.awayWin;
+  } else if (market === "total goals") {
+    const m = sel.match(/^(over|under)\s*([\d.]+)/i);
+    if (m) {
+      const key = m[2];
+      const bucket = m[1].toLowerCase() === "over" ? probs.over : probs.under;
+      if (key in bucket) modelP = bucket[key];
+    }
+  }
+  if (modelP == null) return null;
+  return Math.abs(modelP - fair);
+}
+
 export async function runScanNow() {
   const apiKey = process.env.ODDS_API_IO_KEY;
   if (!apiKey) throw new Error("Missing ODDS_API_IO_KEY");
@@ -93,6 +122,13 @@ export async function runScanNow() {
   let reused = 0;
   let diagLogged = 0;
   const marketTally = { moneyline: 0, totals: 0, corners: 0, cards: 0 };
+  let shadowOk = 0;
+  const shadowFail: Record<ModelFailure, number> = {
+    no_key: 0,
+    team_unresolved: 0,
+    insufficient_form: 0,
+  };
+  const shadowDisagreements: number[] = [];
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
@@ -147,7 +183,46 @@ export async function runScanNow() {
         away: odds.away ?? e.away,
         date: odds.date ?? e.date,
       };
-      scored.push(scoreEvent(merged));
+      const scoredMatch = scoreEvent(merged);
+
+      // Shadow-mode independent model — never influences verdict/stake/recs.
+      const { inputs, reason } = await getModelInputs(merged.home, merged.away);
+      if (!inputs) {
+        scoredMatch.signals.model = null;
+        if (reason) shadowFail[reason]++;
+      } else {
+        const homeRates = attackDefenceRates(inputs.homeForm);
+        const awayRates = attackDefenceRates(inputs.awayForm);
+        if (!homeRates || !awayRates) {
+          scoredMatch.signals.model = null;
+          shadowFail.insufficient_form++;
+        } else {
+          const probs = poissonMatchProbabilities(
+            homeRates.attack,
+            homeRates.defence,
+            awayRates.attack,
+            awayRates.defence,
+          );
+          const disagreement = computeDisagreement(scoredMatch, probs);
+          scoredMatch.signals.model = {
+            homeWin: probs.homeWin,
+            draw: probs.draw,
+            awayWin: probs.awayWin,
+            expectedHomeGoals: probs.expectedHomeGoals,
+            expectedAwayGoals: probs.expectedAwayGoals,
+            over: probs.over,
+            under: probs.under,
+            sampleSize: inputs.sampleSize,
+            disagreement,
+          };
+          shadowOk++;
+          if (disagreement != null) {
+            shadowDisagreements.push(disagreement);
+          }
+        }
+      }
+
+      scored.push(scoredMatch);
       stage.scored++;
     } catch (err) {
       console.error("scan: score failed", e.id, err);
@@ -155,6 +230,15 @@ export async function runScanNow() {
     }
   }
   console.log("scan:markets", { events: events.length, ...marketTally });
+  const meanDisagreement =
+    shadowDisagreements.length
+      ? shadowDisagreements.reduce((a, b) => a + b, 0) / shadowDisagreements.length
+      : null;
+  console.log("model:shadow", {
+    ok: shadowOk,
+    ...shadowFail,
+    meanDisagreement: meanDisagreement != null ? Number(meanDisagreement.toFixed(4)) : null,
+  });
 
   // 3) Determine scan status.
   let status: ScanStatus;

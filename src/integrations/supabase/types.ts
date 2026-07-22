@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      form_cache: {
+        Row: {
+          fetched_at: string
+          payload: Json
+          team_id: number
+        }
+        Insert: {
+          fetched_at?: string
+          payload: Json
+          team_id: number
+        }
+        Update: {
+          fetched_at?: string
+          payload?: Json
+          team_id?: number
+        }
+        Relationships: []
+      }
       match_signals: {
         Row: {
           away: string
@@ -142,6 +160,24 @@ export type Database = {
           scanned_at?: string
           stage_stats?: Json
           status?: string
+        }
+        Relationships: []
+      }
+      team_ids: {
+        Row: {
+          name: string
+          resolved_at: string
+          team_id: number
+        }
+        Insert: {
+          name: string
+          resolved_at?: string
+          team_id: number
+        }
+        Update: {
+          name?: string
+          resolved_at?: string
+          team_id?: number
         }
         Relationships: []
       }
