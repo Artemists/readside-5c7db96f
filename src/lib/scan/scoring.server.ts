@@ -344,6 +344,35 @@ function buildValueResult(
 }
 
 
+// -------------------- Trap (0..100) --------------------
+function trapScore(
+  event: OddsEvent,
+  quotes: MLQuote[],
+): { score: number; note: string } {
+  if (quotes.length === 0) {
+    return { score: 0, note: "no odds to evaluate" };
+  }
+  const favImplieds = quotes.map((q) => Math.max(1 / q.home, 1 / q.away));
+  const shortestFav = Math.max(...favImplieds);
+  const favN =
+    shortestFav >= SCORING.trap.favThreshold
+      ? clamp((shortestFav - SCORING.trap.favThreshold) / (0.95 - SCORING.trap.favThreshold), 0, 1)
+      : 0;
+  const bigName = SCORING.trap.bigNames.test(`${event.home} ${event.away}`) ? 1 : 0;
+  const homeOdds = quotes.map((q) => q.home);
+  const spread =
+    homeOdds.length > 1
+      ? clamp((Math.max(...homeOdds) - Math.min(...homeOdds)) / Math.min(...homeOdds), 0, 0.2) / 0.2
+      : 0;
+  const w = SCORING.trap.weights;
+  const raw = favN * w.fav + bigName * w.bigName + spread * w.spread;
+  const score = Math.round(raw * 100);
+  return {
+    score: clamp(score, 0, 100),
+    note: `fav implied ${(shortestFav * 100).toFixed(0)}%${bigName ? ", high-profile side" : ""}${spread > 0 ? `, book spread ${(spread * 20).toFixed(0)}%` : ""}`,
+  };
+}
+
 // -------------------- Verdict / stake / reasoning --------------------
 function decideVerdict(
   ctx: number, val: number, trap: number,
@@ -377,13 +406,15 @@ function buildReasoning(
 
 export function scoreEvent(event: OddsEvent): ScoredMatch {
   const quotes = extractMoneylines(event);
+  const totalsQuotes = extractTotals(event);
   const ctx = contextScore(event);
-  const val = valueScore(quotes);
+  const mlMarket = evaluateMoneyline(quotes);
+  const totalsMarket = evaluateTotals(totalsQuotes);
+  const val = buildValueResult([mlMarket, ...(totalsMarket ? [totalsMarket] : [])]);
   const exp = explosionScore(event, quotes);
   const trap = trapScore(event, quotes);
 
   const verdict = decideVerdict(ctx.score, val.score, trap.score);
-  // Confidence: bounded 1..10 from a blend of context and value.
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
   const confidence = Math.round(clamp(confidenceRaw, 1, 10) * 10) / 10;
 
@@ -414,7 +445,7 @@ export function scoreEvent(event: OddsEvent): ScoredMatch {
     confidence,
     verdict,
     stake,
-    recommendedMarket: val.bestSelection ? "Moneyline" : null,
+    recommendedMarket: val.bestSelection ? (val.winnerMarket ?? "Moneyline") : null,
     recommendedSelection: val.bestSelection,
     bestOdds: val.bestOdds,
     fairProbability: val.fairProb,
@@ -425,9 +456,9 @@ export function scoreEvent(event: OddsEvent): ScoredMatch {
     signals: {
       context: { score: ctx.score, note: ctx.note, tier: ctx.tier },
       explosion: { score: exp.score, note: exp.note },
-      value: { score: val.score, note: val.note, audit: val.audit },
+      value: { score: val.score, note: val.note, audit: val.audit, market: val.winnerMarket },
       trap: { score: trap.score, note: trap.note },
     },
-
   };
 }
+
