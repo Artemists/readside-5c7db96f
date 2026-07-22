@@ -92,6 +92,7 @@ export async function runScanNow() {
   const scored: ScoredMatch[] = [];
   let reused = 0;
   let diagLogged = 0;
+  const marketTally = { moneyline: 0, totals: 0, corners: 0, cards: 0 };
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
@@ -111,8 +112,22 @@ export async function runScanNow() {
         continue;
       }
       stage.oddsOk++;
+      const books = odds.bookmakers ?? {};
+      const seen = { moneyline: false, totals: false, corners: false, cards: false };
+      for (const markets of Object.values(books)) {
+        for (const m of markets) {
+          const n = (m.name ?? "").toLowerCase();
+          if (n === "ml" || n === "moneyline" || n === "h2h") seen.moneyline = true;
+          if (n.includes("corner")) seen.corners = true;
+          else if (n.includes("card") || n.includes("booking")) seen.cards = true;
+          else if (n === "totals" || n === "over/under" || n === "o/u") seen.totals = true;
+        }
+      }
+      if (seen.moneyline) marketTally.moneyline++;
+      if (seen.totals) marketTally.totals++;
+      if (seen.corners) marketTally.corners++;
+      if (seen.cards) marketTally.cards++;
       if (diagLogged < 3) {
-        const books = odds.bookmakers ?? {};
         const summary = Object.entries(books).map(([book, markets]) => ({
           book,
           markets: markets.map((m) => m.name),
@@ -139,6 +154,7 @@ export async function runScanNow() {
       sawFailure = true;
     }
   }
+  console.log("scan:markets", { events: events.length, ...marketTally });
 
   // 3) Determine scan status.
   let status: ScanStatus;
