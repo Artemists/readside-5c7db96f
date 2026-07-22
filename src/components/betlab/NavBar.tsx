@@ -4,10 +4,7 @@ import logoAsset from "@/assets/betlab-logo.svg.asset.json";
 
 const links = [
   { to: "/", label: "Signals" },
-  { to: "/match-intelligence", label: "Analysis" },
-  { to: "/value-scanner", label: "Value scanner" },
-  { to: "/popular-pick-warning", label: "Warnings" },
-  { to: "/yesterday", label: "History" },
+  { to: "/matches", label: "Matches" },
 ] as const;
 
 export function NavBar() {
