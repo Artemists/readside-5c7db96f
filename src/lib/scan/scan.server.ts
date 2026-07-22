@@ -153,7 +153,46 @@ export async function runScanNow() {
         away: odds.away ?? e.away,
         date: odds.date ?? e.date,
       };
-      scored.push(scoreEvent(merged));
+      const scoredMatch = scoreEvent(merged);
+
+      // Shadow-mode independent model — never influences verdict/stake/recs.
+      const { inputs, reason } = await getModelInputs(merged.home, merged.away);
+      if (!inputs) {
+        scoredMatch.signals.model = null;
+        if (reason) shadowFail[reason]++;
+      } else {
+        const homeRates = attackDefenceRates(inputs.homeForm);
+        const awayRates = attackDefenceRates(inputs.awayForm);
+        if (!homeRates || !awayRates) {
+          scoredMatch.signals.model = null;
+          shadowFail.insufficient_form++;
+        } else {
+          const probs = poissonMatchProbabilities(
+            homeRates.attack,
+            homeRates.defence,
+            awayRates.attack,
+            awayRates.defence,
+          );
+          const disagreement = computeDisagreement(scoredMatch, probs);
+          scoredMatch.signals.model = {
+            homeWin: probs.homeWin,
+            draw: probs.draw,
+            awayWin: probs.awayWin,
+            expectedHomeGoals: probs.expectedHomeGoals,
+            expectedAwayGoals: probs.expectedAwayGoals,
+            over: probs.over,
+            under: probs.under,
+            sampleSize: inputs.sampleSize,
+            disagreement,
+          };
+          shadowOk++;
+          if (disagreement != null) {
+            shadowDisagreements.push(disagreement);
+          }
+        }
+      }
+
+      scored.push(scoredMatch);
       stage.scored++;
     } catch (err) {
       console.error("scan: score failed", e.id, err);
@@ -161,6 +200,15 @@ export async function runScanNow() {
     }
   }
   console.log("scan:markets", { events: events.length, ...marketTally });
+  const meanDisagreement =
+    shadowDisagreements.length
+      ? shadowDisagreements.reduce((a, b) => a + b, 0) / shadowDisagreements.length
+      : null;
+  console.log("model:shadow", {
+    ok: shadowOk,
+    ...shadowFail,
+    meanDisagreement: meanDisagreement != null ? Number(meanDisagreement.toFixed(4)) : null,
+  });
 
   // 3) Determine scan status.
   let status: ScanStatus;
