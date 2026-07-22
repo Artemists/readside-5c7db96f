@@ -123,7 +123,7 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
     const { data: rows } = await supabaseAdmin
       .from("match_signals")
       .select(
-        "verdict, ev_percent, edge_percent, fair_probability, implied_probability, best_odds, home, away, match_id, recommended_market, recommended_selection",
+        "verdict, ev_percent, edge_percent, fair_probability, implied_probability, best_odds, home, away, match_id, recommended_market, recommended_selection, competition, sport, kickoff, value_score, trap_score, context_score, explosion_score, confidence, stake, provisional",
       )
       .eq("local_date", today);
 
