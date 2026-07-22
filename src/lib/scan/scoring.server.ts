@@ -53,13 +53,14 @@ function extractTotalsLine(event: OddsEvent): number | null {
 
 type TotalsQuote = { line: number; over: number; under: number; book: string };
 
-function extractTotals(event: OddsEvent): TotalsQuote[] {
+function extractOverUnderBy(
+  event: OddsEvent,
+  matcher: (name: string) => boolean,
+): TotalsQuote[] {
   const out: TotalsQuote[] = [];
   const books = event.bookmakers ?? {};
   for (const [bookName, markets] of Object.entries(books)) {
-    const ou = markets.find(
-      (m) => m.name === "Totals" || m.name === "Over/Under" || m.name === "O/U",
-    );
+    const ou = markets.find((m) => matcher((m.name ?? "").toLowerCase()));
     const row = ou?.odds?.[0];
     if (!row) continue;
     const line = typeof row.max === "number" ? row.max : typeof row.hdp === "number" ? row.hdp : null;
@@ -69,6 +70,20 @@ function extractTotals(event: OddsEvent): TotalsQuote[] {
     out.push({ line, over, under, book: bookName });
   }
   return out;
+}
+
+function extractTotals(event: OddsEvent): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) =>
+    n === "totals" || n === "over/under" || n === "o/u",
+  );
+}
+
+export function extractCorners(event: OddsEvent): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) => n.includes("corner"));
+}
+
+export function extractCards(event: OddsEvent): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) => n.includes("card") || n.includes("booking"));
 }
 
 
@@ -172,8 +187,10 @@ type ValueResult = {
   };
 };
 
+type MarketName = "Moneyline" | "Total goals" | "Total corners" | "Total cards";
+
 type EvaluatedMarket = {
-  market: "Moneyline" | "Total goals";
+  market: MarketName;
   selections: SelectionAudit[];
   eligibleWinner: SelectionAudit | null;
   fallbackByEv: SelectionAudit | null;
@@ -247,30 +264,32 @@ function evaluateMoneyline(quotes: MLQuote[]): EvaluatedMarket {
   };
 }
 
-function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
-  if (totals.length === 0) return null;
-  // Group by line — de-vig only makes sense within the same line.
+function evaluateOverUnder(
+  quotes: TotalsQuote[],
+  market: MarketName,
+  unitLabel: string,
+): EvaluatedMarket | null {
+  if (quotes.length === 0) return null;
   const byLine = new Map<number, TotalsQuote[]>();
-  for (const t of totals) {
+  for (const t of quotes) {
     const arr = byLine.get(t.line) ?? [];
     arr.push(t);
     byLine.set(t.line, arr);
   }
-  // Prefer the line with the most books.
   const [line, group] = [...byLine.entries()].sort((a, b) => b[1].length - a[1].length)[0];
   const perBookOdds = group.map((t) => [t.over, t.under]);
   const rawAudits = evaluateSelections(["over", "under"] as const, perBookOdds, group.map((t) => t.book));
-  // Relabel selections to "Over N"/"Under N" for downstream display.
   const audits = rawAudits.audits.map((a) => ({
     ...a,
-    selection: (a.selection === "over" ? `Over ${line}` : `Under ${line}`) as SelectionAudit["selection"],
+    selection: (a.selection === "over"
+      ? `Over ${line} ${unitLabel}`
+      : `Under ${line} ${unitLabel}`) as SelectionAudit["selection"],
   }));
   const eligibleAudits = audits.filter((a) => a.eligible);
   const eligibleWinner = eligibleAudits.length ? eligibleAudits.reduce((a, b) => (a.evPct > b.evPct ? a : b)) : null;
   const fallbackByEv = audits.length ? audits.reduce((a, b) => (a.evPct > b.evPct ? a : b)) : null;
-
   return {
-    market: "Total goals",
+    market,
     selections: audits,
     eligibleWinner,
     fallbackByEv,
@@ -278,6 +297,18 @@ function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
     hasDraw: false,
     extra: { line },
   };
+}
+
+function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
+  return evaluateOverUnder(totals, "Total goals", "goals");
+}
+
+function evaluateCorners(quotes: TotalsQuote[]): EvaluatedMarket | null {
+  return evaluateOverUnder(quotes, "Total corners", "corners");
+}
+
+function evaluateCards(quotes: TotalsQuote[]): EvaluatedMarket | null {
+  return evaluateOverUnder(quotes, "Total cards", "cards");
 }
 
 function buildValueResult(
@@ -407,10 +438,18 @@ function buildReasoning(
 export function scoreEvent(event: OddsEvent): ScoredMatch {
   const quotes = extractMoneylines(event);
   const totalsQuotes = extractTotals(event);
+  const cornersQuotes = extractCorners(event);
+  const cardsQuotes = extractCards(event);
   const ctx = contextScore(event);
   const mlMarket = evaluateMoneyline(quotes);
   const totalsMarket = evaluateTotals(totalsQuotes);
-  const val = buildValueResult([mlMarket, ...(totalsMarket ? [totalsMarket] : [])]);
+  const cornersMarket = evaluateCorners(cornersQuotes);
+  const cardsMarket = evaluateCards(cardsQuotes);
+  const val = buildValueResult(
+    [mlMarket, totalsMarket, cornersMarket, cardsMarket].filter(
+      (m): m is EvaluatedMarket => m != null && m.selections.length > 0,
+    ),
+  );
   const exp = explosionScore(event, quotes);
   const trap = trapScore(event, quotes);
 
