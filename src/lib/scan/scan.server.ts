@@ -18,6 +18,29 @@ type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
  * four-score model, and upserts everything into the DB in one scan.
  * Reuses per-event stored rows when they were scored within eventFreshMinutes.
  */
+function computeDisagreement(scored: ScoredMatch, probs: MatchProbabilities): number | null {
+  const sel = scored.recommendedSelection;
+  const market = (scored.recommendedMarket ?? "").toLowerCase();
+  const fair = scored.fairProbability;
+  if (!sel || fair == null) return null;
+  let modelP: number | null = null;
+  if (market.includes("moneyline") || market === "" || market === "ml") {
+    const s = sel.toLowerCase();
+    if (s === "home") modelP = probs.homeWin;
+    else if (s === "draw") modelP = probs.draw;
+    else if (s === "away") modelP = probs.awayWin;
+  } else if (market === "total goals") {
+    const m = sel.match(/^(over|under)\s*([\d.]+)/i);
+    if (m) {
+      const key = m[2];
+      const bucket = m[1].toLowerCase() === "over" ? probs.over : probs.under;
+      if (key in bucket) modelP = bucket[key];
+    }
+  }
+  if (modelP == null) return null;
+  return Math.abs(modelP - fair);
+}
+
 export async function runScanNow() {
   const apiKey = process.env.ODDS_API_IO_KEY;
   if (!apiKey) throw new Error("Missing ODDS_API_IO_KEY");
