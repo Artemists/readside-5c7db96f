@@ -42,7 +42,7 @@ export const Route = createFileRoute("/matches")({
 });
 
 function MatchesPage() {
-  const { verdict } = Route.useSearch();
+  const { verdict } = Route.useSearch() as { verdict?: "opportunity" | "trap" | "ignore" };
   const fn = useServerFn(listByVerdict);
   const { data } = useSuspenseQuery({
     queryKey: ["matches", verdict ?? "all"],
