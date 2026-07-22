@@ -29,6 +29,7 @@ export async function runScanNow() {
   for (const sport of SCAN.sports) {
     const list = await listEvents(sport, apiKey);
     for (const e of list) {
+      if (e.status && e.status !== "pending") continue;
       const d = e.date ? athensLocalDate(new Date(e.date)) : null;
       if (d && d === localDate) {
         allEvents.push({
