@@ -99,6 +99,13 @@ export async function runScanNow() {
   let reused = 0;
   let diagLogged = 0;
   const marketTally = { moneyline: 0, totals: 0, corners: 0, cards: 0 };
+  let shadowOk = 0;
+  const shadowFail: Record<ModelFailure, number> = {
+    no_key: 0,
+    team_unresolved: 0,
+    insufficient_form: 0,
+  };
+  const shadowDisagreements: number[] = [];
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
