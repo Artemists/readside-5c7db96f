@@ -107,7 +107,7 @@ export async function runScanNow() {
       edge_percent: s.edgePercent,
       ev_percent: s.evPercent,
       reasoning: s.reasoning,
-      signals: s.signals,
+      signals: s.signals as never,
       updated_at: new Date().toISOString(),
     }));
     const { error: rowsErr } = await supabaseAdmin
