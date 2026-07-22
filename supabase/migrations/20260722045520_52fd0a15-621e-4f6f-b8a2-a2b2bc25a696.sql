@@ -1,0 +1,1 @@
+ALTER TABLE public.scans ADD COLUMN IF NOT EXISTS stage_stats jsonb NOT NULL DEFAULT '{}'::jsonb;

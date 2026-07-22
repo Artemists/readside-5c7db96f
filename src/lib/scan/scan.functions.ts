@@ -9,6 +9,7 @@ type ScanRow = {
   fixtures_count: number;
   status: string;
   api_calls?: number | null;
+  stage_stats?: Record<string, number> | null;
 };
 
 /**
@@ -70,11 +71,11 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
     // Latest scan (any status)
     const { data: latest } = await supabaseAdmin
       .from("scans")
-      .select("id, scanned_at, fixtures_count, status, api_calls, duration_ms")
+      .select("id, scanned_at, fixtures_count, status, api_calls, duration_ms, stage_stats")
       .eq("local_date", today)
       .order("scanned_at", { ascending: false })
       .limit(1)
-      .maybeSingle<ScanRow & { duration_ms: number | null }>();
+      .maybeSingle<ScanRow & { duration_ms: number | null; stage_stats: Record<string, number> | null }>();
 
     // Latest successful scan (ok or partial) — used for displayed counts
     // when latest is rate_limited/failed.
@@ -151,6 +152,7 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
             fixturesCount: latest.fixtures_count,
             apiCalls: latest.api_calls ?? 0,
             durationMs: latest.duration_ms ?? null,
+            stageStats: latest.stage_stats ?? null,
           }
         : null,
       degraded: isDegraded,

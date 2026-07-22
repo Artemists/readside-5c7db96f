@@ -27,6 +27,14 @@ export async function runScanNow() {
   };
 
   // 1) Pull events across sports, filter to today (Athens-local).
+  const stage = {
+    fetched: 0,
+    afterStatus: 0,
+    afterDate: 0,
+    oddsOk: 0,
+    oddsError: 0,
+    scored: 0,
+  };
   const allEvents: Array<{
     id: string;
     sport: string;
@@ -39,10 +47,14 @@ export async function runScanNow() {
     apiCalls++;
     const { events, status } = await listEvents(sport, apiKey);
     noteStatus(status);
+    stage.fetched += events.length;
     for (const e of events) {
+      // Real values seen: "pending" (upcoming), "settled", "cancelled", "live".
       if (e.status && e.status !== "pending") continue;
+      stage.afterStatus++;
       const d = e.date ? athensLocalDate(new Date(e.date)) : null;
       if (d && d === localDate) {
+        stage.afterDate++;
         allEvents.push({
           id: String(e.id),
           sport: e.sport ?? sport,
@@ -80,18 +92,30 @@ export async function runScanNow() {
     }
     try {
       apiCalls++;
-      const { event: odds, status } = await fetchOddsForEvent(e.id, apiKey);
+      const { event: odds, status } = await fetchOddsForEvent(
+        e.id,
+        apiKey,
+        SCAN.bookmakers,
+      );
       noteStatus(status);
-      if (!odds) continue;
+      if (!odds) {
+        stage.oddsError++;
+        continue;
+      }
+      stage.oddsOk++;
+      // Prefer the already-normalized (string) sport/league from listEvents;
+      // /v3/odds returns them as { name, slug } objects which would break
+      // downstream string-based checks.
       const merged = {
         ...odds,
         sport: e.sport,
-        league: e.league ?? odds.league,
+        league: e.league,
         home: odds.home ?? e.home,
         away: odds.away ?? e.away,
         date: odds.date ?? e.date,
       };
       scored.push(scoreEvent(merged));
+      stage.scored++;
     } catch (err) {
       console.error("scan: score failed", e.id, err);
       sawFailure = true;
@@ -116,6 +140,7 @@ export async function runScanNow() {
       duration_ms: duration,
       status,
       api_calls: apiCalls,
+      stage_stats: stage,
     })
     .select()
     .single();
