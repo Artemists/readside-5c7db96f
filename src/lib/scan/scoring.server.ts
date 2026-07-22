@@ -52,31 +52,35 @@ function extractTotalsLine(event: OddsEvent): number | null {
 }
 
 // -------------------- Context (0..10) --------------------
-function contextScore(event: OddsEvent): { score: number; note: string } {
+export function competitionTier(competition: string | null | undefined): number {
+  const comp = competition ?? "";
+  for (const rule of SCORING.context.tierKeywords) {
+    if (rule.match.test(comp)) return rule.tier;
+  }
+  return SCORING.context.tierDefault;
+}
+
+function contextScore(event: OddsEvent): { score: number; note: string; tier: number } {
   const books = event.bookmakers ?? {};
   const bookCount = Object.keys(books).length;
   const marketCount = Math.max(
     0,
     ...Object.values(books).map((m) => m.length),
+    0,
   );
-  const comp = event.league ?? "";
-  let tier = 0.5;
-  for (const rule of SCORING.context.tierKeywords) {
-    if (rule.match.test(comp)) {
-      tier = rule.tier;
-      break;
-    }
-  }
+  const tier = competitionTier(event.league);
   const w = SCORING.context.weights;
   const marketsN = Math.min(1, marketCount / SCORING.context.marketsCap);
   const booksN = Math.min(1, bookCount / SCORING.context.bookmakersCap);
   const raw = marketsN * w.markets + booksN * w.bookmakers + tier * w.tier;
-  const score = Math.round(raw * 10 * 10) / 10; // 0..10, 1dp
+  const score = Math.round(raw * 10 * 10) / 10;
   return {
     score,
-    note: `${bookCount} bookmakers, ${marketCount} markets, tier ${(tier * 10).toFixed(0)}/10`,
+    tier,
+    note: `${bookCount} book(s), ${marketCount} markets, tier ${(tier * 10).toFixed(0)}/10`,
   };
 }
+
 
 // -------------------- Explosion (0..100) --------------------
 function explosionScore(
@@ -115,6 +119,19 @@ function explosionScore(
 }
 
 // -------------------- Value (0..100) --------------------
+type BookQuote = { book: string; odds: number; implied: number };
+type SelectionAudit = {
+  selection: "home" | "draw" | "away";
+  quotes: BookQuote[];
+  fairProb: number;
+  bestOdds: number;
+  bestBook: string;
+  bestImplied: number;
+  edgePct: number;
+  evPct: number;
+  eligible: boolean;
+  disqualifier: string | null;
+};
 type ValueResult = {
   score: number;
   edgePercent: number | null;
@@ -124,57 +141,120 @@ type ValueResult = {
   impliedProb: number | null;
   evPercent: number | null;
   note: string;
+  audit: {
+    booksSeen: string[];
+    hasDraw: boolean;
+    selections: SelectionAudit[];
+    winner: string | null;
+    disqualifier: string | null;
+  };
 };
 
 function valueScore(quotes: MLQuote[]): ValueResult {
+  const cfg = SCORING.value;
+  const emptyAudit = {
+    booksSeen: quotes.map((q) => q.book),
+    hasDraw: quotes.every((q) => q.draw != null),
+    selections: [] as SelectionAudit[],
+    winner: null as string | null,
+    disqualifier: null as string | null,
+  };
   if (quotes.length === 0) {
     return {
       score: 50, edgePercent: null, bestOdds: null, bestSelection: null,
       fairProb: null, impliedProb: null, evPercent: null,
       note: "no moneyline available",
+      audit: { ...emptyAudit, disqualifier: "no_moneyline" },
     };
   }
-  // Consensus fair probs = average of de-vigged probs across books.
   const hasDraw = quotes.every((q) => q.draw != null);
-  const selections = hasDraw ? ["home", "draw", "away"] as const : ["home", "away"] as const;
+  const selectionsList = hasDraw
+    ? (["home", "draw", "away"] as const)
+    : (["home", "away"] as const);
+
+  // Per-book de-vigged probabilities.
   const perBookFair = quotes.map((q) =>
     devig(hasDraw ? [q.home, q.draw!, q.away] : [q.home, q.away]),
   );
-  const fair = selections.map((_, i) => {
+  const fair = selectionsList.map((_, i) => {
     const vals = perBookFair.map((row) => row[i]);
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   });
 
-  // For each selection, find best (highest) available decimal odds across books.
-  const bestPerSelection = selections.map((sel, i) => {
-    const priced = quotes.map((q) => {
+  const audits: SelectionAudit[] = selectionsList.map((sel, i) => {
+    const priced: BookQuote[] = quotes.map((q) => {
       const o = sel === "home" ? q.home : sel === "away" ? q.away : q.draw!;
-      return { odds: o, book: q.book };
+      return { book: q.book, odds: o, implied: 1 / o };
     });
     const best = priced.reduce((a, b) => (a.odds > b.odds ? a : b));
-    const implied = 1 / best.odds;
-    const edgePct = ((fair[i] - implied) / implied) * 100;
-    const ev = fair[i] * (best.odds - 1) - (1 - fair[i]);
-    return { sel, ...best, implied, fair: fair[i], edgePct, ev };
+    const edgePct = ((fair[i] - best.implied) / best.implied) * 100;
+    const evPct = (fair[i] * (best.odds - 1) - (1 - fair[i])) * 100;
+    let disqualifier: string | null = null;
+    if (priced.length < cfg.minBooksForValue) disqualifier = "single_book";
+    else if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
+    else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    return {
+      selection: sel,
+      quotes: priced,
+      fairProb: fair[i],
+      bestOdds: best.odds,
+      bestBook: best.book,
+      bestImplied: best.implied,
+      edgePct,
+      evPct,
+      eligible: disqualifier === null,
+      disqualifier,
+    };
   });
 
-  // Pick selection with highest EV.
-  const winner = bestPerSelection.reduce((a, b) => (a.ev > b.ev ? a : b));
-  const cap = SCORING.value.edgePctForFullScore;
+  const eligible = audits.filter((a) => a.eligible);
+  if (eligible.length === 0) {
+    // No selection passes guards — value is neutral, cannot be an opportunity.
+    const bestByEv = audits.reduce((a, b) => (a.evPct > b.evPct ? a : b));
+    return {
+      score: 50,
+      edgePercent: Math.round(bestByEv.edgePct * 100) / 100,
+      bestOdds: Math.round(bestByEv.bestOdds * 1000) / 1000,
+      bestSelection: bestByEv.selection,
+      fairProb: Math.round(bestByEv.fairProb * 10000) / 10000,
+      impliedProb: Math.round(bestByEv.bestImplied * 10000) / 10000,
+      evPercent: Math.round(bestByEv.evPct * 100) / 100,
+      note: `neutral — ${bestByEv.disqualifier ?? "no eligible selection"}`,
+      audit: {
+        booksSeen: quotes.map((q) => q.book),
+        hasDraw,
+        selections: audits,
+        winner: null,
+        disqualifier: bestByEv.disqualifier,
+      },
+    };
+  }
+
+  const winner = eligible.reduce((a, b) => (a.evPct > b.evPct ? a : b));
+  // Rescale so 100 essentially never occurs; ~8% edge = ~95.
+  const cap = cfg.edgePctForFullScore;
   const clamped = clamp(winner.edgePct, -cap, cap);
-  const score = clamp(50 + (clamped / cap) * 50, 0, 100);
+  const score = clamp(50 + (clamped / cap) * 45, 0, 100);
 
   return {
     score: Math.round(score * 10) / 10,
     edgePercent: Math.round(winner.edgePct * 100) / 100,
-    bestOdds: Math.round(winner.odds * 1000) / 1000,
-    bestSelection: winner.sel,
-    fairProb: Math.round(winner.fair * 10000) / 10000,
-    impliedProb: Math.round(winner.implied * 10000) / 10000,
-    evPercent: Math.round(winner.ev * 100 * 100) / 100,
-    note: `best ${winner.sel} @ ${winner.odds.toFixed(2)} (${winner.book}), fair ${(winner.fair * 100).toFixed(1)}%, edge ${winner.edgePct.toFixed(1)}%`,
+    bestOdds: Math.round(winner.bestOdds * 1000) / 1000,
+    bestSelection: winner.selection,
+    fairProb: Math.round(winner.fairProb * 10000) / 10000,
+    impliedProb: Math.round(winner.bestImplied * 10000) / 10000,
+    evPercent: Math.round(winner.evPct * 100) / 100,
+    note: `best ${winner.selection} @ ${winner.bestOdds.toFixed(2)} (${winner.bestBook}), fair ${(winner.fairProb * 100).toFixed(1)}%, edge ${winner.edgePct.toFixed(1)}%`,
+    audit: {
+      booksSeen: quotes.map((q) => q.book),
+      hasDraw,
+      selections: audits,
+      winner: winner.selection,
+      disqualifier: null,
+    },
   };
 }
+
 
 // -------------------- Trap (0..100) --------------------
 function trapScore(
@@ -290,10 +370,11 @@ export function scoreEvent(event: OddsEvent): ScoredMatch {
     evPercent: val.evPercent,
     reasoning,
     signals: {
-      context: { score: ctx.score, note: ctx.note },
+      context: { score: ctx.score, note: ctx.note, tier: ctx.tier },
       explosion: { score: exp.score, note: exp.note },
-      value: { score: val.score, note: val.note },
+      value: { score: val.score, note: val.note, audit: val.audit },
       trap: { score: trap.score, note: trap.note },
     },
+
   };
 }

@@ -26,7 +26,8 @@ export const runDailyScan = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const today = athensLocalDate();
 
-    const { data: last } = await supabaseAdmin
+    // Latest scan (any status) — used for force cooldown.
+    const { data: latest } = await supabaseAdmin
       .from("scans")
       .select("id, scanned_at, fixtures_count, status, api_calls")
       .eq("local_date", today)
@@ -35,22 +36,49 @@ export const runDailyScan = createServerFn({ method: "POST" })
       .maybeSingle();
 
     const now = Date.now();
-    if (last) {
-      const ageMin = (now - new Date(last.scanned_at).getTime()) / 60000;
-      const limitMin = data.force ? SCAN.forceCooldownMinutes : SCAN.staleAfterMinutes;
-      if (ageMin < limitMin) {
-        const nextAvailableAt = new Date(
-          new Date(last.scanned_at).getTime() + limitMin * 60_000,
-        ).toISOString();
+
+    if (data.force) {
+      // Force: only safety cooldown to prevent double-taps / quota burn.
+      if (latest) {
+        const ageMin = (now - new Date(latest.scanned_at).getTime()) / 60000;
+        if (ageMin < SCAN.forceCooldownMinutes) {
+          const nextAvailableAt = new Date(
+            new Date(latest.scanned_at).getTime() + SCAN.forceCooldownMinutes * 60_000,
+          ).toISOString();
+          return {
+            reused: true,
+            rateLimited: true,
+            scanId: latest.id,
+            scannedAt: latest.scanned_at,
+            fixturesCount: latest.fixtures_count,
+            status: latest.status,
+            apiCalls: latest.api_calls ?? 0,
+            nextAvailableAt,
+          };
+        }
+      }
+    } else {
+      // Non-force (auto): reuse only if today already has a successful scan
+      // that actually scored at least one fixture.
+      const { data: lastOkArr } = await supabaseAdmin
+        .from("scans")
+        .select("id, scanned_at, fixtures_count, status, api_calls")
+        .eq("local_date", today)
+        .in("status", ["ok", "partial"])
+        .gt("fixtures_count", 0)
+        .order("scanned_at", { ascending: false })
+        .limit(1);
+      const lastOk = lastOkArr?.[0];
+      if (lastOk) {
         return {
           reused: true,
-          rateLimited: data.force === true,
-          scanId: last.id,
-          scannedAt: last.scanned_at,
-          fixturesCount: last.fixtures_count,
-          status: last.status,
-          apiCalls: last.api_calls ?? 0,
-          nextAvailableAt,
+          rateLimited: false,
+          scanId: lastOk.id,
+          scannedAt: lastOk.scanned_at,
+          fixturesCount: lastOk.fixtures_count,
+          status: lastOk.status,
+          apiCalls: lastOk.api_calls ?? 0,
+          nextAvailableAt: null,
         };
       }
     }
@@ -58,10 +86,11 @@ export const runDailyScan = createServerFn({ method: "POST" })
     const { runScanNow } = await import("./scan.server");
     const result = await runScanNow();
     const nextAvailableAt = new Date(
-      new Date(result.scannedAt).getTime() + SCAN.staleAfterMinutes * 60_000,
+      new Date(result.scannedAt).getTime() + SCAN.forceCooldownMinutes * 60_000,
     ).toISOString();
     return { reused: false, rateLimited: false, ...result, nextAvailableAt };
   });
+
 
 export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -77,16 +106,18 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
       .limit(1)
       .maybeSingle<ScanRow & { duration_ms: number | null; stage_stats: Record<string, number> | null }>();
 
-    // Latest successful scan (ok or partial) — used for displayed counts
-    // when latest is rate_limited/failed.
+    // Latest successful scan (ok or partial with real fixtures) — used for
+    // displayed counts when latest is rate_limited/failed/empty.
     const { data: lastOkArr } = await supabaseAdmin
       .from("scans")
       .select("id, scanned_at, fixtures_count, status, api_calls")
       .eq("local_date", today)
       .in("status", ["ok", "partial"])
+      .gt("fixtures_count", 0)
       .order("scanned_at", { ascending: false })
       .limit(1);
     const lastOk = (lastOkArr?.[0] ?? null) as ScanRow | null;
+
 
     // Signals for today (from whatever scans have run today).
     const { data: rows } = await supabaseAdmin

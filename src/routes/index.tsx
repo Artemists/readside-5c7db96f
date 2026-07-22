@@ -19,7 +19,7 @@ import {
   runDailyScan,
 } from "@/lib/scan/scan.functions";
 import { athensLocalTime } from "@/lib/time";
-import { SCAN } from "@/lib/scan/config";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -76,22 +76,18 @@ function MorningBriefing() {
     },
   });
 
-  // Auto-run once on first mount only if genuinely stale.
-  // Reads from cache otherwise — no API calls on repeat opens.
+  // Auto-run once on first load if — and only if — today has no
+  // successful scan yet. Never triggered by opening or navigating otherwise.
   const autoRan = useRef(false);
   useEffect(() => {
     if (autoRan.current) return;
     const s = summary.data;
     if (!s) return;
     autoRan.current = true;
-    const stale =
-      !s.lastScanAt ||
-      Date.now() - new Date(s.lastScanAt).getTime() > SCAN.staleAfterMinutes * 60_000;
-    // Only auto-run if we don't already have a successful scan in the window.
-    if (stale && !s.hasSuccessfulScan) scan.mutate(false);
-    else if (stale) scan.mutate(false);
+    if (!s.hasSuccessfulScan) scan.mutate(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary.data?.lastScanAt]);
+  }, [summary.data?.hasSuccessfulScan]);
+
 
   const s = summary.data;
   const counts = s?.counts ?? { opportunity: 0, trap: 0, ignore: 0 };
