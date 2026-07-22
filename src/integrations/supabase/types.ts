@@ -111,6 +111,7 @@ export type Database = {
       }
       scans: {
         Row: {
+          api_calls: number
           duration_ms: number | null
           fixtures_count: number
           id: string
@@ -119,6 +120,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          api_calls?: number
           duration_ms?: number | null
           fixtures_count?: number
           id?: string
@@ -127,6 +129,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          api_calls?: number
           duration_ms?: number | null
           fixtures_count?: number
           id?: string

@@ -1,0 +1,1 @@
+ALTER TABLE public.scans ADD COLUMN IF NOT EXISTS api_calls integer NOT NULL DEFAULT 0;

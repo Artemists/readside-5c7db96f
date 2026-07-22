@@ -22,33 +22,54 @@ export type EventListItem = {
   status?: string;
 };
 
+export type CallStatus = "ok" | "rate_limited" | "failed";
+
 function pickName(v: RawEvent["sport"] | RawEvent["league"]): string | undefined {
   if (!v) return undefined;
   if (typeof v === "string") return v;
   return v.name ?? v.slug;
 }
 
-/** List events for a sport (odds-api.io returns next ~14d, mixed statuses). */
+/** List events for a sport. Returns a discriminated result so callers can
+ *  distinguish an empty response from a rate-limit or failure. */
 export async function listEvents(
   sport: string,
   apiKey: string,
-): Promise<EventListItem[]> {
+): Promise<{ events: EventListItem[]; status: CallStatus }> {
   const url = `${BASE}/events?sport=${encodeURIComponent(sport)}&apiKey=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { accept: "application/json" } });
+  } catch (err) {
+    console.error(`listEvents ${sport}: network error`, err);
+    return { events: [], status: "failed" };
+  }
+  if (res.status === 429) {
+    console.warn(`listEvents ${sport}: HTTP 429 rate limited`);
+    return { events: [], status: "rate_limited" };
+  }
   if (!res.ok) {
     console.error(`listEvents ${sport}: HTTP ${res.status}`);
-    return [];
+    return { events: [], status: "failed" };
   }
   const body = (await res.json()) as
     | RawEvent[]
     | { events?: RawEvent[]; error?: string };
-  if (!Array.isArray(body)) {
-    if (body && "error" in body && body.error) {
-      console.error(`listEvents ${sport}: ${body.error}`);
+  const arr: RawEvent[] = Array.isArray(body)
+    ? body
+    : Array.isArray((body as { events?: RawEvent[] }).events)
+      ? ((body as { events?: RawEvent[] }).events as RawEvent[])
+      : [];
+  if (!Array.isArray(body) && body && "error" in body && body.error) {
+    console.error(`listEvents ${sport}: ${body.error}`);
+    const msg = String(body.error).toLowerCase();
+    if (msg.includes("rate") || msg.includes("limit") || msg.includes("quota")) {
+      return { events: [], status: "rate_limited" };
     }
-    const nested = (body as { events?: RawEvent[] }).events;
-    if (!Array.isArray(nested)) return [];
-    return nested.map((e) => ({
+    return { events: [], status: "failed" };
+  }
+  return {
+    events: arr.map((e) => ({
       id: String(e.id),
       sport: pickName(e.sport) ?? sport,
       league: pickName(e.league),
@@ -56,29 +77,27 @@ export async function listEvents(
       away: e.away,
       date: e.date,
       status: e.status,
-    }));
-  }
-  return body.map((e) => ({
-    id: String(e.id),
-    sport: pickName(e.sport) ?? sport,
-    league: pickName(e.league),
-    home: e.home,
-    away: e.away,
-    date: e.date,
-    status: e.status,
-  }));
+    })),
+    status: "ok",
+  };
 }
 
 /** Fetch odds for a single event across all bookmakers. */
 export async function fetchOddsForEvent(
   eventId: string,
   apiKey: string,
-): Promise<OddsEvent | null> {
+): Promise<{ event: OddsEvent | null; status: CallStatus }> {
   const url = `${BASE}/odds?eventId=${encodeURIComponent(eventId)}&apiKey=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) return null;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { accept: "application/json" } });
+  } catch (err) {
+    console.error(`fetchOddsForEvent ${eventId}: network error`, err);
+    return { event: null, status: "failed" };
+  }
+  if (res.status === 429) return { event: null, status: "rate_limited" };
+  if (!res.ok) return { event: null, status: "failed" };
   const body = (await res.json()) as OddsEvent | OddsEvent[];
   const event = Array.isArray(body) ? body[0] : body;
-  if (!event) return null;
-  return event;
+  return { event: event ?? null, status: "ok" };
 }

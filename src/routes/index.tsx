@@ -28,13 +28,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Live scan of today's football, basketball and tennis fixtures with Opportunity, Trap and Ignore verdicts.",
+          "Live scan of today's football fixtures with Opportunity, Trap and Ignore verdicts.",
       },
       { property: "og:title", content: "Today's briefing — Readside BetLab" },
       {
         property: "og:description",
         content:
-          "Live scan of today's football, basketball and tennis fixtures with Opportunity, Trap and Ignore verdicts.",
+          "Live scan of today's football fixtures with Opportunity, Trap and Ignore verdicts.",
       },
     ],
   }),
@@ -60,9 +60,15 @@ function MorningBriefing() {
 
   const scan = useMutation({
     mutationFn: (force: boolean) => runScan({ data: { force } }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["scan-summary"] });
       router.invalidate();
+      if (result?.rateLimited) {
+        const next = result.nextAvailableAt
+          ? athensLocalTime(new Date(result.nextAvailableAt))
+          : "later";
+        toast.message(`Rate-limited. Next scan available at ${next}.`);
+      }
     },
     onError: (err) => {
       console.error(err);
@@ -70,7 +76,8 @@ function MorningBriefing() {
     },
   });
 
-  // Auto-run once on first mount if data is missing/stale.
+  // Auto-run once on first mount only if genuinely stale.
+  // Reads from cache otherwise — no API calls on repeat opens.
   const autoRan = useRef(false);
   useEffect(() => {
     if (autoRan.current) return;
@@ -80,7 +87,9 @@ function MorningBriefing() {
     const stale =
       !s.lastScanAt ||
       Date.now() - new Date(s.lastScanAt).getTime() > SCAN.staleAfterMinutes * 60_000;
-    if (stale) scan.mutate(false);
+    // Only auto-run if we don't already have a successful scan in the window.
+    if (stale && !s.hasSuccessfulScan) scan.mutate(false);
+    else if (stale) scan.mutate(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary.data?.lastScanAt]);
 
@@ -88,9 +97,17 @@ function MorningBriefing() {
   const counts = s?.counts ?? { opportunity: 0, trap: 0, ignore: 0 };
   const conditions = deriveConditions(s?.market);
   const scanning = scan.isPending;
-  const lastScanLabel = s?.lastScanAt
-    ? `Last scan: ${athensLocalTime(new Date(s.lastScanAt))}`
-    : "No scan yet today";
+
+  const nextForceAt = s?.nextForceAvailableAt ? new Date(s.nextForceAvailableAt) : null;
+  const forceBlocked = !!nextForceAt && nextForceAt.getTime() > Date.now();
+  const rescanLabel = scanning
+    ? null
+    : forceBlocked && nextForceAt
+      ? `Next scan at ${athensLocalTime(nextForceAt)}`
+      : "Rescan";
+
+  const showDegradedNotice = !!s?.degraded && !!s?.hasSuccessfulScan;
+  const showNoScanNotice = !s?.hasSuccessfulScan;
 
   return (
     <PageShell>
@@ -100,12 +117,21 @@ function MorningBriefing() {
           <button
             type="button"
             onClick={() => scan.mutate(true)}
-            disabled={scanning}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card-inner px-4 py-2 text-[13px] font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-60"
+            disabled={scanning || forceBlocked}
+            title={forceBlocked && nextForceAt ? `Next scan available at ${athensLocalTime(nextForceAt)}` : undefined}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card-inner px-4 py-2 text-[13px] font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {scanning ? <Spinner label="Scanning…" /> : "Rescan"}
+            {scanning ? <Spinner label="Scanning…" /> : rescanLabel}
           </button>
         </div>
+
+        {showDegradedNotice && s ? (
+          <WarningBadge>
+            {s.latest?.status === "rate_limited"
+              ? `Rate-limited by odds provider. Showing results from ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}. Could not refresh.`
+              : `Could not refresh scan. Showing results from ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`}
+          </WarningBadge>
+        ) : null}
 
         <Divider />
 
@@ -119,24 +145,36 @@ function MorningBriefing() {
           </div>
         ) : (
           <p className="text-[14px] text-text-muted">
-            Not enough data yet — run a scan.
+            {showNoScanNotice
+              ? "No successful scan yet today."
+              : "Not enough data yet — run a scan."}
           </p>
         )}
 
         <Divider />
 
         <SectionLabel>Today's signals</SectionLabel>
-        <div className="flex gap-3">
-          <VerdictLink to="opportunity">
-            <StatCard icon="🔥" value={counts.opportunity} label="Opportunities" />
-          </VerdictLink>
-          <VerdictLink to="trap">
-            <StatCard icon="⚠" value={counts.trap} label="Traps" />
-          </VerdictLink>
-          <VerdictLink to="ignore">
-            <StatCard icon="🚫" value={counts.ignore} label="Ignore" />
-          </VerdictLink>
-        </div>
+        {showNoScanNotice ? (
+          <p className="text-[14px] text-text-muted">
+            No scan has completed successfully today. {s?.latest?.status === "rate_limited"
+              ? "The odds provider is rate-limiting requests — try again later."
+              : s?.latest?.status === "failed"
+                ? "The last attempt failed — try again in a few minutes."
+                : "Tap Rescan to start one."}
+          </p>
+        ) : (
+          <div className="flex gap-3">
+            <VerdictLink to="opportunity">
+              <StatCard icon="🔥" value={counts.opportunity} label="Opportunities" />
+            </VerdictLink>
+            <VerdictLink to="trap">
+              <StatCard icon="⚠" value={counts.trap} label="Traps" />
+            </VerdictLink>
+            <VerdictLink to="ignore">
+              <StatCard icon="🚫" value={counts.ignore} label="Ignore" />
+            </VerdictLink>
+          </div>
+        )}
 
         {s?.topEdge ? (
           <>
@@ -168,14 +206,32 @@ function MorningBriefing() {
           </>
         ) : null}
 
-        <div className="flex items-center justify-between pt-2 text-[11px] text-text-disabled">
-          <span className="caption-mono">{lastScanLabel}</span>
-          <span className="caption-mono">
-            {s?.fixturesCount ?? 0} fixtures scanned
-          </span>
-        </div>
+        <Divider />
+        <Diagnostics summary={s} />
       </Card>
     </PageShell>
+  );
+}
+
+function Diagnostics({
+  summary,
+}: {
+  summary: ReturnType<typeof useQuery<Awaited<ReturnType<typeof getTodayScanSummary>>>>["data"] | undefined;
+}) {
+  const latest = summary?.latest;
+  return (
+    <div className="flex flex-col gap-1 text-[11px] text-text-disabled">
+      <div className="flex items-center justify-between">
+        <span className="caption-mono">
+          {latest
+            ? `Last attempt ${athensLocalTime(new Date(latest.scannedAt))} · ${latest.status}`
+            : "No scan yet today"}
+        </span>
+        <span className="caption-mono">
+          {latest ? `${latest.fixturesCount} fixtures · ${latest.apiCalls} API calls` : ""}
+        </span>
+      </div>
+    </div>
   );
 }
 
