@@ -52,31 +52,35 @@ function extractTotalsLine(event: OddsEvent): number | null {
 }
 
 // -------------------- Context (0..10) --------------------
-function contextScore(event: OddsEvent): { score: number; note: string } {
+export function competitionTier(competition: string | null | undefined): number {
+  const comp = competition ?? "";
+  for (const rule of SCORING.context.tierKeywords) {
+    if (rule.match.test(comp)) return rule.tier;
+  }
+  return SCORING.context.tierDefault;
+}
+
+function contextScore(event: OddsEvent): { score: number; note: string; tier: number } {
   const books = event.bookmakers ?? {};
   const bookCount = Object.keys(books).length;
   const marketCount = Math.max(
     0,
     ...Object.values(books).map((m) => m.length),
+    0,
   );
-  const comp = event.league ?? "";
-  let tier = 0.5;
-  for (const rule of SCORING.context.tierKeywords) {
-    if (rule.match.test(comp)) {
-      tier = rule.tier;
-      break;
-    }
-  }
+  const tier = competitionTier(event.league);
   const w = SCORING.context.weights;
   const marketsN = Math.min(1, marketCount / SCORING.context.marketsCap);
   const booksN = Math.min(1, bookCount / SCORING.context.bookmakersCap);
   const raw = marketsN * w.markets + booksN * w.bookmakers + tier * w.tier;
-  const score = Math.round(raw * 10 * 10) / 10; // 0..10, 1dp
+  const score = Math.round(raw * 10 * 10) / 10;
   return {
     score,
-    note: `${bookCount} bookmakers, ${marketCount} markets, tier ${(tier * 10).toFixed(0)}/10`,
+    tier,
+    note: `${bookCount} book(s), ${marketCount} markets, tier ${(tier * 10).toFixed(0)}/10`,
   };
 }
+
 
 // -------------------- Explosion (0..100) --------------------
 function explosionScore(
