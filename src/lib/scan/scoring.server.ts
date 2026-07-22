@@ -53,13 +53,14 @@ function extractTotalsLine(event: OddsEvent): number | null {
 
 type TotalsQuote = { line: number; over: number; under: number; book: string };
 
-function extractTotals(event: OddsEvent): TotalsQuote[] {
+function extractOverUnderBy(
+  event: OddsEvent,
+  matcher: (name: string) => boolean,
+): TotalsQuote[] {
   const out: TotalsQuote[] = [];
   const books = event.bookmakers ?? {};
   for (const [bookName, markets] of Object.entries(books)) {
-    const ou = markets.find(
-      (m) => m.name === "Totals" || m.name === "Over/Under" || m.name === "O/U",
-    );
+    const ou = markets.find((m) => matcher((m.name ?? "").toLowerCase()));
     const row = ou?.odds?.[0];
     if (!row) continue;
     const line = typeof row.max === "number" ? row.max : typeof row.hdp === "number" ? row.hdp : null;
@@ -69,6 +70,22 @@ function extractTotals(event: OddsEvent): TotalsQuote[] {
     out.push({ line, over, under, book: bookName });
   }
   return out;
+}
+
+function extractTotals(event: OddsEvent): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) =>
+    n === "totals" || n === "over/under" || n === "o/u" ||
+    (n.includes("total") && !n.includes("corner") && !n.includes("card") && !n.includes("booking")) ||
+    (n.includes("over") && n.includes("under") && !n.includes("corner") && !n.includes("card") && !n.includes("booking")),
+  );
+}
+
+export function extractCorners(event: OddsEvent): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) => n.includes("corner"));
+}
+
+export function extractCards(event: OddsEvent): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) => n.includes("card") || n.includes("booking"));
 }
 
 
