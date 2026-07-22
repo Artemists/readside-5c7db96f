@@ -51,6 +51,27 @@ function extractTotalsLine(event: OddsEvent): number | null {
   return null;
 }
 
+type TotalsQuote = { line: number; over: number; under: number; book: string };
+
+function extractTotals(event: OddsEvent): TotalsQuote[] {
+  const out: TotalsQuote[] = [];
+  const books = event.bookmakers ?? {};
+  for (const [bookName, markets] of Object.entries(books)) {
+    const ou = markets.find(
+      (m) => m.name === "Totals" || m.name === "Over/Under" || m.name === "O/U",
+    );
+    const row = ou?.odds?.[0];
+    if (!row) continue;
+    const line = typeof row.max === "number" ? row.max : typeof row.hdp === "number" ? row.hdp : null;
+    const over = num(row.over);
+    const under = num(row.under);
+    if (line == null || over == null || under == null) continue;
+    out.push({ line, over, under, book: bookName });
+  }
+  return out;
+}
+
+
 // -------------------- Context (0..10) --------------------
 export function competitionTier(competition: string | null | undefined): number {
   const comp = competition ?? "";
