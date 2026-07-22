@@ -187,8 +187,10 @@ type ValueResult = {
   };
 };
 
+type MarketName = "Moneyline" | "Total goals" | "Total corners" | "Total cards";
+
 type EvaluatedMarket = {
-  market: "Moneyline" | "Total goals";
+  market: MarketName;
   selections: SelectionAudit[];
   eligibleWinner: SelectionAudit | null;
   fallbackByEv: SelectionAudit | null;
