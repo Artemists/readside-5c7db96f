@@ -59,10 +59,17 @@ export const STAKE = {
 } as const;
 
 export const SCAN = {
-  // Auto-rescan if last scan for today is older than this many minutes.
+  // Reuse the latest scan if it is younger than this many minutes.
+  // Applies to normal loads AND to the auto-run on app open.
   staleAfterMinutes: 30,
+  // Minimum interval between forced (button) scans. Safety valve against
+  // hammering the shared 100-req/hour odds-api.io quota.
+  forceCooldownMinutes: 10,
+  // Per-event odds re-fetch threshold. If an event was scored within this
+  // window we reuse the stored row instead of calling the odds API.
+  eventFreshMinutes: 30,
   // Hard cap on how many events we score per scan (quota control).
   maxEvents: 30,
-  // Which sports to include.
-  sports: ["football", "basketball", "tennis"] as const,
+  // Which sports to include. Narrowed to football until quota picture is clearer.
+  sports: ["football"] as const,
 };
