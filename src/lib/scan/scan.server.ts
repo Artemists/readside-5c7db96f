@@ -1,21 +1,30 @@
 import { SCAN } from "./config";
 import { athensLocalDate } from "@/lib/time";
-import { fetchOddsForEvent, listEvents } from "./fixtures.server";
+import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
 import { scoreEvent } from "./scoring.server";
 import type { ScoredMatch } from "./types";
+
+type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
 
 /**
  * Fetches today's fixtures across configured sports, scores each with the
  * four-score model, and upserts everything into the DB in one scan.
+ * Reuses per-event stored rows when they were scored within eventFreshMinutes.
  */
 export async function runScanNow() {
   const apiKey = process.env.ODDS_API_IO_KEY;
-  if (!apiKey) {
-    throw new Error("Missing ODDS_API_IO_KEY");
-  }
+  if (!apiKey) throw new Error("Missing ODDS_API_IO_KEY");
   const started = Date.now();
   const localDate = athensLocalDate();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  let apiCalls = 0;
+  let sawRateLimit = false;
+  let sawFailure = false;
+  const noteStatus = (s: CallStatus) => {
+    if (s === "rate_limited") sawRateLimit = true;
+    else if (s === "failed") sawFailure = true;
+  };
 
   // 1) Pull events across sports, filter to today (Athens-local).
   const allEvents: Array<{
@@ -27,8 +36,10 @@ export async function runScanNow() {
     date?: string;
   }> = [];
   for (const sport of SCAN.sports) {
-    const list = await listEvents(sport, apiKey);
-    for (const e of list) {
+    apiCalls++;
+    const { events, status } = await listEvents(sport, apiKey);
+    noteStatus(status);
+    for (const e of events) {
       if (e.status && e.status !== "pending") continue;
       const d = e.date ? athensLocalDate(new Date(e.date)) : null;
       if (d && d === localDate) {
@@ -47,11 +58,30 @@ export async function runScanNow() {
   // Cap to protect quota.
   const events = allEvents.slice(0, SCAN.maxEvents);
 
-  // 2) Fetch odds + score.
+  // Pre-fetch existing fresh signals so we can skip re-fetching their odds.
+  const freshCutoff = new Date(Date.now() - SCAN.eventFreshMinutes * 60_000).toISOString();
+  const { data: freshRows } = events.length
+    ? await supabaseAdmin
+        .from("match_signals")
+        .select("match_id, updated_at")
+        .eq("local_date", localDate)
+        .in("match_id", events.map((e) => e.id))
+        .gte("updated_at", freshCutoff)
+    : { data: [] as Array<{ match_id: string; updated_at: string }> };
+  const freshIds = new Set((freshRows ?? []).map((r) => r.match_id));
+
+  // 2) Fetch odds + score (skip fresh ones).
   const scored: ScoredMatch[] = [];
+  let reused = 0;
   for (const e of events) {
+    if (freshIds.has(e.id)) {
+      reused++;
+      continue;
+    }
     try {
-      const odds = await fetchOddsForEvent(e.id, apiKey);
+      apiCalls++;
+      const { event: odds, status } = await fetchOddsForEvent(e.id, apiKey);
+      noteStatus(status);
       if (!odds) continue;
       const merged = {
         ...odds,
@@ -64,18 +94,28 @@ export async function runScanNow() {
       scored.push(scoreEvent(merged));
     } catch (err) {
       console.error("scan: score failed", e.id, err);
+      sawFailure = true;
     }
   }
 
-  // 3) Persist scan row + rows.
+  // 3) Determine scan status.
+  let status: ScanStatus;
+  if (sawRateLimit && scored.length === 0 && reused === 0) status = "rate_limited";
+  else if (sawFailure && scored.length === 0 && reused === 0) status = "failed";
+  else if (sawRateLimit || sawFailure) status = "partial";
+  else if (events.length === 0) status = "partial";
+  else status = "ok";
+
+  const totalFixtures = scored.length + reused;
   const duration = Date.now() - started;
   const { data: scan, error: scanErr } = await supabaseAdmin
     .from("scans")
     .insert({
       local_date: localDate,
-      fixtures_count: scored.length,
+      fixtures_count: totalFixtures,
       duration_ms: duration,
-      status: scored.length === 0 ? "partial" : "ok",
+      status,
+      api_calls: apiCalls,
     })
     .select()
     .single();
@@ -114,16 +154,18 @@ export async function runScanNow() {
     const { error: rowsErr } = await supabaseAdmin
       .from("match_signals")
       .upsert(rows, { onConflict: "local_date,match_id" });
-    if (rowsErr) {
-      console.error("match_signals upsert failed", rowsErr);
-    }
+    if (rowsErr) console.error("match_signals upsert failed", rowsErr);
   }
 
   return {
     scanId: scan.id,
     scannedAt: scan.scanned_at,
     localDate,
-    fixturesCount: scored.length,
+    fixturesCount: totalFixtures,
+    scoredCount: scored.length,
+    reusedCount: reused,
+    apiCalls,
+    status,
     durationMs: duration,
   };
 }
