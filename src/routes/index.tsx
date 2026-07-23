@@ -81,27 +81,28 @@ function MorningBriefing() {
     },
     onError: (err) => {
       console.error(err);
-      toast.error("Δεν ήταν δυνατή η εκτέλεση σάρωσης");
+      toast.error("Could not run scan");
     },
   });
 
-  // Auto-run once per page load only. Triggers if today has no successful
-  // scan, or the latest scan is older than the staleness threshold. Never
-  // re-scans on navigation back within the same session — the ref guard
-  // enforces "at most once per mount".
+  // Auto-run once per page load only. Uses lastAttemptAt (not lastScanAt) so
+  // that repeatedly-failing scans don't cause a fresh scan attempt on every
+  // mount and burn quota.
   const autoRan = useRef(false);
   useEffect(() => {
     if (autoRan.current) return;
     const s = summary.data;
     if (!s) return;
     autoRan.current = true;
-    const stale =
-      !!s.lastScanAt &&
-      Date.now() - new Date(s.lastScanAt).getTime() >
-        SCAN.autoScanIntervalHours * 3_600_000;
-    if (!s.hasSuccessfulScan || stale) scan.mutate(false);
+    const attemptAgeMs = s.lastAttemptAt
+      ? Date.now() - new Date(s.lastAttemptAt).getTime()
+      : Infinity;
+    const stale = attemptAgeMs > SCAN.autoScanIntervalHours * 3_600_000;
+    // Never fire if we attempted within the cadence window, even without a
+    // successful scan — otherwise a failing provider would be hit on every mount.
+    if (stale) scan.mutate(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary.data?.hasSuccessfulScan, summary.data?.lastScanAt]);
+  }, [summary.data?.hasSuccessfulScan, summary.data?.lastAttemptAt]);
 
 
   const s = summary.data;
@@ -109,19 +110,46 @@ function MorningBriefing() {
   const conditions = deriveConditions(s?.market);
   const scanning = scan.isPending;
 
-  const showDegradedNotice = !!s?.degraded && !!s?.hasSuccessfulScan;
+  const latestZeroFixtures =
+    !!s?.lastAttemptAt &&
+    (s.lastAttemptStatus === "ok" || s.lastAttemptStatus === "partial") &&
+    (s.lastAttemptFixtures ?? 0) === 0;
+  const showDegradedNotice =
+    (!!s?.degraded && !!s?.hasSuccessfulScan) ||
+    (latestZeroFixtures && !!s?.hasSuccessfulScan);
   const showNoScanNotice = !s?.hasSuccessfulScan;
-  const lastScanLabel = (() => {
-    if (!s?.lastScanAt) return null;
+
+  // "Updated / Checked HH:MM" reflects the last ATTEMPT, not the last success.
+  const attemptLabel = (() => {
+    if (!s?.lastAttemptAt) return null;
+    const d = new Date(s.lastAttemptAt);
+    const ageMs = Date.now() - d.getTime();
+    const stamp = ageMs > 6 * 3_600_000 ? athensLocalDateTime(d) : athensLocalTime(d);
+    const status = s.lastAttemptStatus;
+    const fixtures = s.lastAttemptFixtures ?? 0;
+    if (status === "rate_limited")
+      return { text: `Checked ${stamp} · rate-limited`, warn: true };
+    if (status === "failed")
+      return { text: `Checked ${stamp} · scan failed`, warn: true };
+    if ((status === "ok" || status === "partial") && fixtures === 0)
+      return { text: `Checked ${stamp} · no fixtures scored`, warn: true };
+    return { text: `Updated ${stamp}`, warn: false };
+  })();
+  const successLabel = (() => {
+    if (!s?.lastScanAt || !attemptLabel?.warn) return null;
     const d = new Date(s.lastScanAt);
     const ageMs = Date.now() - d.getTime();
-    // Once the scan is more than 6h old, a bare HH:MM is ambiguous — show
-    // the date too so no one reads a stale morning time as fresh.
     return ageMs > 6 * 3_600_000 ? athensLocalDateTime(d) : athensLocalTime(d);
   })();
 
+
   const [conditionsOpen, setConditionsOpen] = useState(false);
-  const [diagOpen, setDiagOpen] = useState(false);
+  // Auto-expand diagnostics when the latest attempt scored zero so the
+  // funnel is visible without the user needing to know to look for it.
+  const [diagOpen, setDiagOpen] = useState(latestZeroFixtures);
+  useEffect(() => {
+    if (latestZeroFixtures) setDiagOpen(true);
+  }, [latestZeroFixtures]);
 
   const groupedUpcoming = useMemo(
     () => groupByDay(upcoming.data ?? []),
@@ -138,9 +166,19 @@ function MorningBriefing() {
           </h1>
           {scanning ? (
             <Spinner label="Scanning…" />
-          ) : lastScanLabel ? (
-            <span className="caption-mono shrink-0 text-[13px] text-text-muted">
-              Updated {lastScanLabel}
+          ) : attemptLabel ? (
+            <span
+              className={
+                "caption-mono shrink-0 text-right text-[13px] " +
+                (attemptLabel.warn ? "text-accent-dim" : "text-text-muted")
+              }
+            >
+              {attemptLabel.text}
+              {successLabel ? (
+                <span className="block text-text-disabled">
+                  Showing data from {successLabel}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </div>
@@ -148,11 +186,14 @@ function MorningBriefing() {
 
         {showDegradedNotice && s ? (
           <WarningBadge>
-            {s.latest?.status === "rate_limited"
+            {s.lastAttemptStatus === "rate_limited"
               ? `Rate-limited. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`
-              : `Could not refresh. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`}
+              : latestZeroFixtures
+                ? `Latest scan completed but found no fixtures in the window. See diagnostics below. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`
+                : `Could not refresh. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`}
           </WarningBadge>
         ) : null}
+
 
         {/* Market conditions — single line, expandable */}
         {conditions.summary ? (
