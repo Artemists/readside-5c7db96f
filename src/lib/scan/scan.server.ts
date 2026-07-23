@@ -145,6 +145,7 @@ export async function runScanNow() {
   const scored: ScoredMatch[] = [];
   let reused = 0;
   let diagLogged = 0;
+  let valueAuditsLogged = 0;
   const marketTally = { moneyline: 0, totals: 0, corners: 0, cards: 0 };
   let shadowOk = 0;
   const shadowFail: Record<ModelFailure, number> = {
