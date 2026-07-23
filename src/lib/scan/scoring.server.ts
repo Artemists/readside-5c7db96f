@@ -470,9 +470,9 @@ function buildValueResult(
 function trapScore(
   event: OddsEvent,
   quotes: MLQuote[],
-): { score: number; note: string } {
+): { score: number; note: string; favImplied: number | null } {
   if (quotes.length === 0) {
-    return { score: 0, note: "no odds to evaluate" };
+    return { score: 0, note: "no odds to evaluate", favImplied: null };
   }
   const favImplieds = quotes.map((q) => Math.max(1 / q.home, 1 / q.away));
   const shortestFav = Math.max(...favImplieds);
@@ -492,6 +492,7 @@ function trapScore(
   return {
     score: clamp(score, 0, 100),
     note: `fav implied ${(shortestFav * 100).toFixed(0)}%${bigName ? ", high-profile side" : ""}${spread > 0 ? `, book spread ${(spread * 20).toFixed(0)}%` : ""}`,
+    favImplied: shortestFav,
   };
 }
 
