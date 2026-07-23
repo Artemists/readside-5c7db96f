@@ -36,6 +36,7 @@ export type Database = {
         Row: {
           away: string
           best_odds: number | null
+          closing_odds: number | null
           competition: string | null
           confidence: number
           context_score: number
@@ -43,17 +44,23 @@ export type Database = {
           ev_percent: number | null
           explosion_score: number
           fair_probability: number | null
+          frozen: boolean
           home: string
           id: string
           implied_probability: number | null
           kickoff: string | null
           local_date: string
           match_id: string
+          outcome: string | null
+          pnl_units: number | null
           provisional: boolean
           reasoning: string | null
           recommended_market: string | null
           recommended_selection: string | null
+          result_away_goals: number | null
+          result_home_goals: number | null
           scan_id: string | null
+          settled_at: string | null
           signals: Json
           sport: string
           stake: string
@@ -65,6 +72,7 @@ export type Database = {
         Insert: {
           away: string
           best_odds?: number | null
+          closing_odds?: number | null
           competition?: string | null
           confidence?: number
           context_score?: number
@@ -72,17 +80,23 @@ export type Database = {
           ev_percent?: number | null
           explosion_score?: number
           fair_probability?: number | null
+          frozen?: boolean
           home: string
           id?: string
           implied_probability?: number | null
           kickoff?: string | null
           local_date: string
           match_id: string
+          outcome?: string | null
+          pnl_units?: number | null
           provisional?: boolean
           reasoning?: string | null
           recommended_market?: string | null
           recommended_selection?: string | null
+          result_away_goals?: number | null
+          result_home_goals?: number | null
           scan_id?: string | null
+          settled_at?: string | null
           signals?: Json
           sport: string
           stake?: string
@@ -94,6 +108,7 @@ export type Database = {
         Update: {
           away?: string
           best_odds?: number | null
+          closing_odds?: number | null
           competition?: string | null
           confidence?: number
           context_score?: number
@@ -101,17 +116,23 @@ export type Database = {
           ev_percent?: number | null
           explosion_score?: number
           fair_probability?: number | null
+          frozen?: boolean
           home?: string
           id?: string
           implied_probability?: number | null
           kickoff?: string | null
           local_date?: string
           match_id?: string
+          outcome?: string | null
+          pnl_units?: number | null
           provisional?: boolean
           reasoning?: string | null
           recommended_market?: string | null
           recommended_selection?: string | null
+          result_away_goals?: number | null
+          result_home_goals?: number | null
           scan_id?: string | null
+          settled_at?: string | null
           signals?: Json
           sport?: string
           stake?: string
