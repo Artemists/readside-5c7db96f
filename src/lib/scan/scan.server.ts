@@ -184,6 +184,7 @@ export async function runScanNow() {
   };
   const shadowDisagreements: number[] = [];
   const avgSourceCounts = { perCompetition: 0, global: 0 };
+  const lookupStats = makeLookupStats(3);
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
