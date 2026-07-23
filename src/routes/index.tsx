@@ -271,20 +271,25 @@ function UpcomingRow({
       className="flex min-h-[44px] items-center justify-between gap-3 rounded-[8px] px-2 py-2 hover:bg-card-inner"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="caption-mono w-10 shrink-0 text-[11px] text-text-muted">
+        <span className="caption-mono w-12 shrink-0 text-[13px] text-text-muted">
           {time}
         </span>
-        <span className="min-w-0 truncate text-[13px] text-text-primary">
+        <span className="min-w-0 truncate text-[15px] text-text-primary">
           {m.home} · {m.away}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {m.provisional ? (
-          <span className="caption-mono text-[10px] text-text-disabled">prov</span>
+          <span
+            className="caption-mono text-[13px] text-text-disabled"
+            title="Provisional — odds may still move"
+          >
+            prov
+          </span>
         ) : null}
         <span
           className={
-            "caption-mono text-[11px] " +
+            "caption-mono text-[13px] " +
             (m.verdict === "opportunity"
               ? "text-accent"
               : m.verdict === "trap"
