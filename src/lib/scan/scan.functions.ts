@@ -169,7 +169,7 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
 
     const nextScanAvailableAt = latest
       ? new Date(
-          new Date(latest.scanned_at).getTime() + SCAN.staleAfterMinutes * 60_000,
+          new Date(latest.scanned_at).getTime() + SCAN.autoScanIntervalHours * 3_600_000,
         ).toISOString()
       : null;
     const nextForceAvailableAt = latest
