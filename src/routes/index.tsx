@@ -85,24 +85,15 @@ function MorningBriefing() {
     },
   });
 
-  // Auto-run once per page load only. Uses lastAttemptAt (not lastScanAt) so
-  // that repeatedly-failing scans don't cause a fresh scan attempt on every
-  // mount and burn quota.
+  // Run a fresh scan on every page load. force:true bypasses the server's
+  // 12h reuse so the client actually re-scores on mount.
   const autoRan = useRef(false);
   useEffect(() => {
     if (autoRan.current) return;
-    const s = summary.data;
-    if (!s) return;
     autoRan.current = true;
-    const attemptAgeMs = s.lastAttemptAt
-      ? Date.now() - new Date(s.lastAttemptAt).getTime()
-      : Infinity;
-    const stale = attemptAgeMs > SCAN.autoScanIntervalHours * 3_600_000;
-    // Never fire if we attempted within the cadence window, even without a
-    // successful scan — otherwise a failing provider would be hit on every mount.
-    if (stale) scan.mutate(false);
+    scan.mutate(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary.data?.hasSuccessfulScan, summary.data?.lastAttemptAt]);
+  }, []);
 
 
   const s = summary.data;
