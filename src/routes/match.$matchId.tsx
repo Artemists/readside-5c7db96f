@@ -103,6 +103,10 @@ function MatchDetail() {
         {(() => {
           const isIgnore = data.verdict === "ignore";
           const isPass = data.stake === "Pass";
+          const dq =
+            (data.signals as { value?: { audit?: { dataQuality?: string | null } } } | null)
+              ?.value?.audit?.dataQuality ?? null;
+          const thinData = dq === "single_book" || dq === "model_single_book";
           return (
             <>
               <SectionLabel>
@@ -112,6 +116,11 @@ function MatchDetail() {
                 <p className="caption-mono text-text-muted">
                   This match did not clear the model's thresholds. The selection
                   below is shown for transparency only — do not treat it as a pick.
+                </p>
+              ) : null}
+              {thinData ? (
+                <p className="caption-mono text-text-disabled">
+                  Thin data · one bookmaker
                 </p>
               ) : null}
               <div className={`flex flex-col gap-2 ${isIgnore ? "opacity-70" : ""}`}>

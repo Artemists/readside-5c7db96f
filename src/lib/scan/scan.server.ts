@@ -48,6 +48,14 @@ export async function runScanNow() {
   const localDate = athensLocalDate();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+  // Settle finished matches first so results are always fresh.
+  try {
+    const { settleFinishedMatches } = await import("@/lib/settle/settle.server");
+    await settleFinishedMatches();
+  } catch (err) {
+    console.error("settle: failed at scan start", err);
+  }
+
   let apiCalls = 0;
   let sawRateLimit = false;
   let sawFailure = false;
@@ -314,10 +322,21 @@ export async function runScanNow() {
         updated_at: new Date().toISOString(),
       };
     });
-    const { error: rowsErr } = await supabaseAdmin
+    // Never overwrite frozen rows (last pre-kickoff prediction is preserved).
+    const matchIds = rows.map((r) => r.match_id);
+    const { data: frozenRows } = await supabaseAdmin
       .from("match_signals")
-      .upsert(rows, { onConflict: "local_date,match_id" });
-    if (rowsErr) console.error("match_signals upsert failed", rowsErr);
+      .select("match_id")
+      .in("match_id", matchIds)
+      .eq("frozen", true);
+    const frozenSet = new Set((frozenRows ?? []).map((r) => r.match_id));
+    const upsertRows = rows.filter((r) => !frozenSet.has(r.match_id));
+    if (upsertRows.length) {
+      const { error: rowsErr } = await supabaseAdmin
+        .from("match_signals")
+        .upsert(upsertRows, { onConflict: "local_date,match_id" });
+      if (rowsErr) console.error("match_signals upsert failed", rowsErr);
+    }
   }
 
   return {

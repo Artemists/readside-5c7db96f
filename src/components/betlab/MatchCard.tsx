@@ -21,7 +21,13 @@ export type MatchCardData = {
   ev_percent?: number | string | null;
   fair_probability?: number | string | null;
   implied_probability?: number | string | null;
+  signals?: unknown;
 };
+
+function dataQualityOf(m: MatchCardData): string | null {
+  const s = m.signals as { value?: { audit?: { dataQuality?: string | null } } } | null;
+  return s?.value?.audit?.dataQuality ?? null;
+}
 
 const n = (v: unknown): number | null => {
   if (v == null) return null;
@@ -199,6 +205,11 @@ export function MatchCard({ m }: { m: MatchCardData }) {
           ? "Pass · not advised"
           : `${m.stake ?? "Pass"} · ${confidenceLabel(confidence)}${isPass ? " read" : " confidence"}`}
       </p>
+      {dataQualityOf(m) === "single_book" || dataQualityOf(m) === "model_single_book" ? (
+        <p className="caption-mono mt-1 text-[12px] text-text-disabled">
+          Thin data · one bookmaker
+        </p>
+      ) : null}
       {m.provisional ? (
         <p className="caption-mono mt-1 text-[12px] text-text-disabled">
           Provisional · price may move
