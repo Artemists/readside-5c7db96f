@@ -97,7 +97,8 @@ function MorningBriefing() {
     autoRan.current = true;
     const stale =
       !!s.lastScanAt &&
-      Date.now() - new Date(s.lastScanAt).getTime() > 30 * 60 * 1000;
+      Date.now() - new Date(s.lastScanAt).getTime() >
+        SCAN.autoScanIntervalHours * 3_600_000;
     if (!s.hasSuccessfulScan || stale) scan.mutate(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary.data?.hasSuccessfulScan, summary.data?.lastScanAt]);
@@ -110,9 +111,14 @@ function MorningBriefing() {
 
   const showDegradedNotice = !!s?.degraded && !!s?.hasSuccessfulScan;
   const showNoScanNotice = !s?.hasSuccessfulScan;
-  const lastScanLabel = s?.lastScanAt
-    ? athensLocalTime(new Date(s.lastScanAt))
-    : null;
+  const lastScanLabel = (() => {
+    if (!s?.lastScanAt) return null;
+    const d = new Date(s.lastScanAt);
+    const ageMs = Date.now() - d.getTime();
+    // Once the scan is more than 6h old, a bare HH:MM is ambiguous — show
+    // the date too so no one reads a stale morning time as fresh.
+    return ageMs > 6 * 3_600_000 ? athensLocalDateTime(d) : athensLocalTime(d);
+  })();
 
   const [conditionsOpen, setConditionsOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
