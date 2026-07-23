@@ -325,7 +325,7 @@ function ScoreRow({
   return (
     <div className="flex flex-col gap-1">
       <StatBar label={label} value={Math.round(value)} max={max} />
-      <span className="caption-mono pl-20 text-text-disabled">{hint}</span>
+      <span className="caption-mono pl-20 text-[13px] text-text-muted">{hint}</span>
     </div>
   );
 }
