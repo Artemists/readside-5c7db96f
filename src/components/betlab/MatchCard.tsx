@@ -232,10 +232,16 @@ export function MatchCard({ m }: { m: MatchCardData }) {
 
       {open ? (
         <div className="mt-3 flex flex-col gap-2.5">
-          {isIgnore && (decision !== "Awaiting selection") ? (
+          {noBet && (decision !== "Awaiting selection") ? (
             <p className="caption-mono text-[13px] text-text-muted">
               Best available: {decision}
               {odds != null ? ` @ ${odds.toFixed(2)}` : ""} — not advised.
+            </p>
+          ) : null}
+          {noBet ? (
+            <p className="caption-mono text-[13px] text-text-muted">
+              Confidence {confidenceLabel(confidence)}
+              {confidence != null ? ` (${confidence.toFixed(1)}/10)` : ""}
             </p>
           ) : null}
           <ScoreBar label="Value" value={n(m.value_score)} max={100} accent />
