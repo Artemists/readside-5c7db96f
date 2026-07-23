@@ -244,6 +244,7 @@ function evaluateSelections(
     const vals = perBookFair.map((row) => row[i]);
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   });
+  const isSingleBook = perBookOdds.length < cfg.minBooksForValue;
   const audits: SelectionAudit[] = selections.map((sel, i) => {
     const priced: BookQuote[] = perBookOdds.map((row, bi) => ({
       book: books[bi],
@@ -251,24 +252,27 @@ function evaluateSelections(
       implied: 1 / row[i],
     }));
     const best = priced.reduce((a, b) => (a.odds > b.odds ? a : b));
-    let source: SelectionAudit["source"] = "market";
+    let source: SelectionSource = "market";
+    let dataQuality: DataQuality = "multi_book";
     let selFair = marketFair[i];
     let disqualifier: string | null = null;
-    if (priced.length < cfg.minBooksForValue) {
+    if (isSingleBook) {
       const modelP = modelFair?.[i] ?? null;
       if (cfg.singleBookPolicy === "model" && modelP != null && modelP > 0 && modelP < 1) {
         source = "model_single_book";
+        dataQuality = "model_single_book";
         selFair = modelP;
       } else {
-        disqualifier = "single_book";
+        // Single-book market pricing. Read survives; thinness is surfaced
+        // via dataQuality and later dampens the Value score + confidence.
+        source = "single_book_market";
+        dataQuality = "single_book";
       }
     }
     const edgePct = ((selFair - best.implied) / best.implied) * 100;
     const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
-    if (disqualifier === null) {
-      if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
-      else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
-    }
+    if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
+    else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
     return {
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
@@ -281,6 +285,7 @@ function evaluateSelections(
       eligible: disqualifier === null,
       disqualifier,
       source,
+      dataQuality,
     };
   });
   const eligible = audits.filter((a) => a.eligible);
