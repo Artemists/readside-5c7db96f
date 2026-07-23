@@ -428,10 +428,17 @@ function buildValueResult(
   const cap = cfg.edgePctForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
   let score = clamp(50 + (clamped / cap) * 45, 0, 100);
-  // Thin-data dampening: winner priced by a single book (either against the
-  // market or via the shadow model) gets its Value pulled toward 50. Hard
-  // guards (long_shot, suspicious_edge) still apply upstream.
-  if (w.source === "single_book_market" || w.source === "model_single_book") {
+  let singleBookNote = "";
+  // Thin-data handling:
+  //  - single_book_market: edge is not measurable from one book (de-vigging
+  //    one book returns that book's own margin, so fair ≈ implied by
+  //    construction). Pin score to neutral 50 and flag it honestly.
+  //  - model_single_book: independent model probability vs one book — a
+  //    real signal, but dampen toward 50 until the model is validated.
+  if (w.source === "single_book_market") {
+    score = 50;
+    singleBookNote = " — edge not measurable from a single book";
+  } else if (w.source === "model_single_book") {
     score = 50 + (score - 50) * cfg.singleBookValuePenalty;
   }
   const sourceTag =
