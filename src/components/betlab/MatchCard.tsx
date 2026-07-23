@@ -150,6 +150,8 @@ export function MatchCard({ m }: { m: MatchCardData }) {
   const implied = n(m.implied_probability);
   const isOpp = m.verdict === "opportunity";
   const isIgnore = m.verdict === "ignore";
+  const isTrap = m.verdict === "trap";
+  const noBet = isIgnore || isTrap;
   const isPass = (m.stake ?? "Pass") === "Pass";
   const summary = summarySentence(m);
   const decision = decisionPhrase(m);
@@ -182,7 +184,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
       </div>
 
       {/* Decision */}
-      {isIgnore ? (
+      {noBet ? (
         <div className="mt-3">
           <span className="text-[20px] font-bold leading-tight text-text-muted">
             No bet
@@ -201,8 +203,8 @@ export function MatchCard({ m }: { m: MatchCardData }) {
 
       {/* Stake line */}
       <p className="caption-mono mt-3 text-[13px] text-text-secondary">
-        {isIgnore
-          ? "Pass · not advised"
+        {noBet
+          ? "Not advised"
           : `${m.stake ?? "Pass"} · ${confidenceLabel(confidence)}${isPass ? " read" : " confidence"}`}
       </p>
       {dataQualityOf(m) === "single_book" || dataQualityOf(m) === "model_single_book" ? (
