@@ -316,3 +316,137 @@ export const probeProviderCoverage = createServerFn({ method: "POST" }).handler(
   },
 );
 
+/**
+ * Read-only diagnostic. Answers: does odds-api.io expose a /bookmakers
+ * listing, and when we request many books for a real event, how many
+ * actually come back? Manual invocation only. Hard-capped at 12 provider
+ * calls so it cannot burn quota.
+ */
+export const probeBookmakerCoverage = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const apiKey = process.env.ODDS_API_IO_KEY;
+    if (!apiKey) throw new Error("Missing ODDS_API_IO_KEY");
+    const BASE = "https://api.odds-api.io/v3";
+    const MAX_CALLS = 12;
+    let used = 0;
+
+    type Attempt = {
+      label: string;
+      requested: string[];
+      httpStatus: number | null;
+      error: string | null;
+      returned: string[];
+      returnedCount: number;
+    };
+
+    async function callJson(url: string): Promise<{ status: number | null; body: unknown; error: string | null }> {
+      try {
+        const res = await fetch(url, { headers: { accept: "application/json" } });
+        let body: unknown = null;
+        try { body = await res.json(); } catch { /* ignore */ }
+        return { status: res.status, body, error: null };
+      } catch (err) {
+        return { status: null, body: null, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    // 1) /bookmakers listing endpoint
+    used += 1;
+    const listing = await callJson(`${BASE}/bookmakers?apiKey=${encodeURIComponent(apiKey)}`);
+    const listingExtract = (() => {
+      const b = listing.body as unknown;
+      if (Array.isArray(b)) return b as unknown[];
+      if (b && typeof b === "object" && Array.isArray((b as { bookmakers?: unknown[] }).bookmakers)) {
+        return (b as { bookmakers: unknown[] }).bookmakers;
+      }
+      return null;
+    })();
+    const listingNames = listingExtract
+      ? listingExtract.map((x) => (typeof x === "string" ? x : (x as { name?: string; slug?: string })?.name ?? (x as { slug?: string })?.slug ?? String(x)))
+      : null;
+    const listingError =
+      listing.error ??
+      (listing.body && typeof listing.body === "object" && "error" in listing.body
+        ? String((listing.body as { error?: unknown }).error)
+        : null);
+
+    // 2) Pick one upcoming football event
+    used += 1;
+    const eventsResp = await callJson(`${BASE}/events?sport=football&apiKey=${encodeURIComponent(apiKey)}`);
+    const eventsArr = (() => {
+      const b = eventsResp.body as unknown;
+      if (Array.isArray(b)) return b as Array<{ id: string | number; home?: string; away?: string; date?: string; status?: string }>;
+      const wrapped = (b as { events?: unknown[] } | null)?.events;
+      return Array.isArray(wrapped) ? (wrapped as Array<{ id: string | number; home?: string; away?: string; date?: string; status?: string }>) : [];
+    })();
+    const nowMs = Date.now();
+    const chosen = eventsArr.find((e) => {
+      const t = e.date ? Date.parse(e.date) : NaN;
+      return Number.isFinite(t) && t > nowMs && (e.status ? String(e.status).toLowerCase() !== "finished" : true);
+    }) ?? eventsArr[0] ?? null;
+
+    const attempts: Attempt[] = [];
+
+    async function tryOddsWith(label: string, books: string[]): Promise<Attempt | null> {
+      if (!chosen) return null;
+      if (used >= MAX_CALLS) return null;
+      used += 1;
+      const url = `${BASE}/odds?eventId=${encodeURIComponent(String(chosen.id))}&bookmakers=${encodeURIComponent(books.join(","))}&apiKey=${encodeURIComponent(apiKey)}`;
+      const r = await callJson(url);
+      const raw = Array.isArray(r.body) ? r.body[0] : r.body;
+      const errStr =
+        r.error ??
+        (raw && typeof raw === "object" && "error" in raw ? String((raw as { error?: unknown }).error) : null);
+      const bookObj = raw && typeof raw === "object" && "bookmakers" in raw
+        ? (raw as { bookmakers?: Record<string, unknown> }).bookmakers ?? {}
+        : {};
+      const returned = Object.keys(bookObj);
+      return {
+        label,
+        requested: books,
+        httpStatus: r.status,
+        error: errStr,
+        returned,
+        returnedCount: returned.length,
+      };
+    }
+
+    // Current pair
+    const current = await tryOddsWith("current_pair", ["Bet365", "Novibet"]);
+    if (current) attempts.push(current);
+
+    // Wider set
+    const wideBooks = ["Pinnacle", "Bet365", "Novibet", "William Hill", "Unibet", "Betfair", "1xBet", "Betway"];
+    const wide = await tryOddsWith("wide_set", wideBooks);
+    if (wide) attempts.push(wide);
+
+    // Individually probe each extra book (only if we have budget)
+    const extras = ["Pinnacle", "William Hill", "Unibet", "Betfair", "1xBet", "Betway"];
+    for (const b of extras) {
+      if (used >= MAX_CALLS) break;
+      const a = await tryOddsWith(`solo_${b}`, [b]);
+      if (a) attempts.push(a);
+    }
+
+    const result = {
+      probedAt: new Date().toISOString(),
+      callsUsed: used,
+      maxCalls: MAX_CALLS,
+      listing: {
+        httpStatus: listing.status,
+        error: listingError,
+        count: listingNames?.length ?? null,
+        bookmakers: listingNames,
+        rawSample: listingNames ? null : listing.body,
+      },
+      event: chosen
+        ? { id: String(chosen.id), home: chosen.home, away: chosen.away, date: chosen.date }
+        : null,
+      attempts,
+    };
+    console.log("provider:bookmakers", JSON.stringify(result));
+    return result;
+  },
+);
+
+
