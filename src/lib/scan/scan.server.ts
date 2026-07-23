@@ -472,13 +472,19 @@ export async function runScanNow() {
     const medianAbsDiff = sortedDiffs.length
       ? sortedDiffs[Math.floor(sortedDiffs.length / 2)]
       : null;
+    const shadowEdgeArr = pmStats.shadowEdges;
+    const meanShadowEdge = shadowEdgeArr.length
+      ? shadowEdgeArr.reduce((a, b) => a + b, 0) / shadowEdgeArr.length
+      : null;
+    const shadowEdgePositive = shadowEdgeArr.filter((v) => v > 0).length;
     console.log("scan:polymarket", {
       policy: polymarketPolicy,
+      marketsFetched: pmMarkets.length,
       attempted: pmStats.attempted,
       matched: pmStats.matched,
       cachedHits: pmStats.cached,
       failures: {
-        no_market: pmStats.noMarket,
+        no_markets: pmStats.noMarket,
         ambiguous_shape: pmStats.ambiguousShape,
         stale_end_date: pmStats.staleEndDate,
       },
@@ -488,6 +494,9 @@ export async function runScanNow() {
       disagreementN: disags.length,
       meanAbsDiff: meanAbsDiff != null ? Math.round(meanAbsDiff * 10000) / 10000 : null,
       medianAbsDiff: medianAbsDiff != null ? Math.round(medianAbsDiff * 10000) / 10000 : null,
+      shadowEdgeN: shadowEdgeArr.length,
+      meanShadowEdgePct: meanShadowEdge != null ? Math.round(meanShadowEdge * 100) / 100 : null,
+      shadowEdgePositiveCount: shadowEdgePositive,
     });
   }
 
