@@ -179,13 +179,13 @@ function MorningBriefing() {
         {/* Today's signals */}
         <SectionLabel>Today's signals</SectionLabel>
         {showNoScanNotice ? (
-          <p className="text-[13px] text-text-muted">
+          <p className="text-[15px] leading-relaxed text-text-muted">
             No scan has completed successfully today.{" "}
             {s?.latest?.status === "rate_limited"
-              ? "Provider is rate-limiting — try again later."
+              ? "Provider is rate-limiting — check back in a few minutes."
               : s?.latest?.status === "failed"
-                ? "Last attempt failed — try again in a few minutes."
-                : "Tap Rescan to start one."}
+                ? "The last attempt failed — check back in a few minutes."
+                : "One is starting automatically."}
           </p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
