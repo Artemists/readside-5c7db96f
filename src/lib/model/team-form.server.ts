@@ -311,9 +311,10 @@ export type ModelFailure = "no_key" | "team_unresolved" | "insufficient_form";
 export async function getModelInputs(
   home: string,
   away: string,
+  stats?: TeamLookupStats,
 ): Promise<{ inputs: ModelInputs | null; reason: ModelFailure | null }> {
   if (!readKey()) return { inputs: null, reason: "no_key" };
-  const [homeId, awayId] = await Promise.all([findTeamId(home), findTeamId(away)]);
+  const [homeId, awayId] = await Promise.all([findTeamId(home, stats), findTeamId(away, stats)]);
   if (!homeId || !awayId) return { inputs: null, reason: "team_unresolved" };
   const [homeForm, awayForm, h2h] = await Promise.all([
     getRecentForm(homeId),
