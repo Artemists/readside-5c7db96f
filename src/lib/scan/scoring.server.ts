@@ -179,12 +179,16 @@ function explosionScore(
 
 // -------------------- Value (0..100) --------------------
 type BookQuote = { book: string; odds: number; implied: number };
-type SelectionSource = "market" | "single_book_market" | "model_single_book";
-type DataQuality = "multi_book" | "single_book" | "model_single_book";
+type SelectionSource = "market" | "single_book_market" | "model" | "model_single_book";
+type DataQuality = "multi_book" | "single_book" | "model" | "model_single_book";
 type SelectionAudit = {
   selection: string;
   quotes: BookQuote[];
   fairProb: number;
+  /** Market-derived fair (de-vig average across books priced). */
+  marketFair: number;
+  /** Model-derived fair, if the independent model had a probability. */
+  modelFair: number | null;
   bestOdds: number;
   bestBook: string;
   bestImplied: number;
@@ -240,11 +244,12 @@ function evaluateSelections(
     return { audits: [], eligibleWinner: null, fallbackByEv: null };
   }
   const perBookFair = perBookOdds.map((row) => devig(row));
-  const marketFair = selections.map((_, i) => {
+  const marketFairArr = selections.map((_, i) => {
     const vals = perBookFair.map((row) => row[i]);
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   });
   const isSingleBook = perBookOdds.length < cfg.minBooksForValue;
+  const fairSource = cfg.fairSource;
   const audits: SelectionAudit[] = selections.map((sel, i) => {
     const priced: BookQuote[] = perBookOdds.map((row, bi) => ({
       book: books[bi],
@@ -252,23 +257,38 @@ function evaluateSelections(
       implied: 1 / row[i],
     }));
     const best = priced.reduce((a, b) => (a.odds > b.odds ? a : b));
-    let source: SelectionSource = "market";
-    let dataQuality: DataQuality = "multi_book";
-    let selFair = marketFair[i];
-    let disqualifier: string | null = null;
-    if (isSingleBook) {
-      const modelP = modelFair?.[i] ?? null;
-      if (cfg.singleBookPolicy === "model" && modelP != null && modelP > 0 && modelP < 1) {
-        source = "model_single_book";
-        dataQuality = "model_single_book";
-        selFair = modelP;
-      } else {
-        // Single-book market pricing. Read survives; thinness is surfaced
-        // via dataQuality and later dampens the Value score + confidence.
-        source = "single_book_market";
-        dataQuality = "single_book";
-      }
+    const marketFairI = marketFairArr[i];
+    const modelP = modelFair?.[i] ?? null;
+    const modelUsable = modelP != null && modelP > 0 && modelP < 1;
+    const useModel =
+      fairSource === "model"
+        ? modelUsable
+        : fairSource === "market"
+          ? false
+          : /* auto */ modelUsable;
+    let source: SelectionSource;
+    let dataQuality: DataQuality;
+    let selFair: number;
+    if (useModel && isSingleBook) {
+      source = "model_single_book";
+      dataQuality = "model_single_book";
+      selFair = modelP!;
+    } else if (useModel) {
+      source = "model";
+      dataQuality = "model";
+      selFair = modelP!;
+    } else if (isSingleBook) {
+      // No model — single-book market pricing. Read survives (unless
+      // singleBookPolicy blocks it downstream), thinness surfaced.
+      source = "single_book_market";
+      dataQuality = "single_book";
+      selFair = marketFairI;
+    } else {
+      source = "market";
+      dataQuality = "multi_book";
+      selFair = marketFairI;
     }
+    let disqualifier: string | null = null;
     const edgePct = ((selFair - best.implied) / best.implied) * 100;
     const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
     if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
@@ -277,6 +297,8 @@ function evaluateSelections(
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
       fairProb: selFair,
+      marketFair: marketFairI,
+      modelFair: modelUsable ? modelP! : null,
       bestOdds: best.odds,
       bestBook: best.book,
       bestImplied: best.implied,
@@ -443,6 +465,7 @@ function buildValueResult(
   }
   const sourceTag =
     w.source === "model_single_book" ? " [model/single-book]"
+      : w.source === "model" ? " [model]"
       : w.source === "single_book_market" ? " [single-book]"
       : "";
   return {
@@ -552,10 +575,12 @@ export function scoreEvent(
 
   const verdict = decideVerdict(ctx.score, val.score, trap.score);
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
-  const thinData =
-    val.winnerSource === "model_single_book" || val.winnerSource === "single_book_market";
-  const singleBookPenalty = thinData ? SCORING.value.singleBookModelConfidenceFactor : 1;
-  const confidence = Math.round(clamp(confidenceRaw * singleBookPenalty, 1, 10) * 10) / 10;
+  const ws = val.winnerSource;
+  const modelPriced = ws === "model" || ws === "model_single_book";
+  const thinBook = ws === "model_single_book" || ws === "single_book_market";
+  const modelFactor = modelPriced ? SCORING.value.modelConfidenceFactor : 1;
+  const thinFactor = thinBook ? SCORING.value.singleBookModelConfidenceFactor : 1;
+  const confidence = Math.round(clamp(confidenceRaw * modelFactor * thinFactor, 1, 10) * 10) / 10;
 
   const stake =
     verdict === "opportunity" && confidence >= STAKE.smallConfidenceMin

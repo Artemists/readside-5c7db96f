@@ -183,6 +183,7 @@ export async function runScanNow() {
     insufficient_form: 0,
   };
   const shadowDisagreements: number[] = [];
+  const avgSourceCounts = { perCompetition: 0, global: 0 };
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
@@ -246,6 +247,8 @@ export async function runScanNow() {
       let modelProbs: MatchProbabilities | null = null;
       let modelSample = 0;
       let modelReason: ModelFailure | null = null;
+      let avgUsed: number | null = null;
+      let avgSource: "perCompetition" | "global" = "global";
       const { inputs, reason } = await getModelInputs(merged.home, merged.away);
       if (!inputs) {
         modelReason = reason ?? null;
@@ -255,11 +258,25 @@ export async function runScanNow() {
         if (!homeRates || !awayRates) {
           modelReason = "insufficient_form";
         } else {
+          // Per-competition league-average goals-per-team-per-match.
+          // Combined sample (home + away form) must be ≥ 8 matches, else
+          // fall back to the global MODEL_CONFIG.leagueAverageGoals prior.
+          const combined = [...inputs.homeForm, ...inputs.awayForm];
+          if (combined.length >= 8) {
+            const totalGoals = combined.reduce((s, m) => s + m.goalsFor + m.goalsAgainst, 0);
+            const perTeamPerMatch = totalGoals / (combined.length * 2);
+            if (Number.isFinite(perTeamPerMatch) && perTeamPerMatch > 0) {
+              avgUsed = perTeamPerMatch;
+              avgSource = "perCompetition";
+            }
+          }
+          avgSourceCounts[avgSource]++;
           modelProbs = poissonMatchProbabilities(
             homeRates.attack,
             homeRates.defence,
             awayRates.attack,
             awayRates.defence,
+            avgUsed,
           );
           modelSample = inputs.sampleSize;
         }
@@ -283,6 +300,8 @@ export async function runScanNow() {
           under: modelProbs.under,
           sampleSize: modelSample,
           disagreement,
+          avgGoals: avgUsed,
+          avgSource,
         };
         shadowOk++;
         if (disagreement != null) {
@@ -510,7 +529,17 @@ export async function runScanNow() {
   };
   const verdictCounts = { opportunity: 0, trap: 0, ignore: 0 };
   const disqCounts = { long_shot: 0, suspicious_edge: 0, no_market: 0 };
-  const dqCounts = { multi_book: 0, single_book: 0, model_single_book: 0 };
+  const dqCounts = { multi_book: 0, single_book: 0, model: 0, model_single_book: 0 };
+  // scan:fairsource collectors.
+  const fairSourceCounts = { market: 0, model: 0 };
+  const modelVsMarketDiffs: number[] = [];
+  let eventsWithModel = 0;
+  let eventsNoModel = 0;
+  const noModelReasons: Record<string, number> = {
+    no_key: 0,
+    team_unresolved: 0,
+    insufficient_form: 0,
+  };
   const edgePctsMulti: number[] = [];
   const allSelectionEdges: number[] = [];
   const overrounds: number[] = [];
@@ -525,8 +554,9 @@ export async function runScanNow() {
     valueScores.push(s.valueScore);
     trapScores.push(s.trapScore);
     const sig = s.signals as {
-      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; booksSeen?: string[]; selections?: Array<{ dataQuality?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean; quotes?: Array<{ book: string; odds: number }> }> } };
+      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; booksSeen?: string[]; selections?: Array<{ dataQuality?: string; source?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean; marketFair?: number | null; modelFair?: number | null; quotes?: Array<{ book: string; odds: number }> }> } };
       trap?: { favImplied?: number | null };
+      model?: unknown | null;
     };
     const dq = sig.value?.audit?.dataQuality;
     if (dq && dq in dqCounts) dqCounts[dq as keyof typeof dqCounts]++;
@@ -543,6 +573,9 @@ export async function runScanNow() {
       }
       if (has) overrounds.push(sum);
     }
+    // Per-event model presence for scan:fairsource.
+    if (sig.model) eventsWithModel++;
+    else eventsNoModel++;
     for (const sel of sels) {
       if (typeof sel.edgePct === "number") {
         allSelectionEdges.push(sel.edgePct);
@@ -551,6 +584,14 @@ export async function runScanNow() {
       }
       if (sel.dataQuality === "multi_book" && sel.eligible && typeof sel.edgePct === "number") {
         edgePctsMulti.push(sel.edgePct);
+      }
+      // scan:fairsource per-selection tally.
+      const src = sel.source;
+      if (src === "model" || src === "model_single_book") fairSourceCounts.model++;
+      else if (src === "market" || src === "single_book_market") fairSourceCounts.market++;
+      // Absolute diff between model and market fair when BOTH exist.
+      if (typeof sel.marketFair === "number" && typeof sel.modelFair === "number") {
+        modelVsMarketDiffs.push(Math.abs(sel.modelFair - sel.marketFair));
       }
     }
     const fav = sig.trap?.favImplied;
@@ -561,6 +602,29 @@ export async function runScanNow() {
     if (s.contextScore < 4) failedContext++;
     if (s.trapScore >= 60) failedTrap++;
   }
+  // Accumulate model failure reasons from the shadow tally we already built.
+  for (const k of Object.keys(shadowFail) as Array<keyof typeof shadowFail>) {
+    noModelReasons[k] = shadowFail[k];
+  }
+  const meanAbsModelMarketDiff = modelVsMarketDiffs.length
+    ? modelVsMarketDiffs.reduce((a, b) => a + b, 0) / modelVsMarketDiffs.length
+    : null;
+  console.log("scan:fairsource", {
+    fairSource: SCORING.value.fairSource,
+    selections: fairSourceCounts,
+    events: {
+      withModel: eventsWithModel,
+      withoutModel: eventsNoModel,
+      reasons: noModelReasons,
+    },
+    avgSource: avgSourceCounts,
+    modelVsMarketAbsDiff: {
+      n: modelVsMarketDiffs.length,
+      mean: meanAbsModelMarketDiff != null
+        ? Math.round(meanAbsModelMarketDiff * 10000) / 10000
+        : null,
+    },
+  });
   console.log("scan:funnel", {
     scored: scored.length,
     verdicts: verdictCounts,

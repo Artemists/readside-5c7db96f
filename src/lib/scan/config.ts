@@ -59,12 +59,30 @@ export const SCORING = {
     maxAllowedOdds: 6.0,
     // Minimum bookmakers that must quote the selection for a real value read.
     minBooksForValue: 2,
-    // "block" = disqualify single-book selections (safe until the shadow model
-    // is validated). "model" = allow single-book selections to be valued
-    // against the independent model's fair probability instead of market
-    // de-vig. Do NOT set this to "model" until the shadow model has passed
-    // calibration on a few hundred matches.
-    singleBookPolicy: "block" as "block" | "model",
+    // WHY singleBookPolicy = "model": with a 2-book plan and near-identical
+    // books, market de-vig is mathematically ~ -½ × overround edge on every
+    // selection (edge ≈ -½ × overround by construction), so market-only
+    // pricing cannot produce positive edge. Polymarket covers 0/30 of our
+    // slate. The independent Poisson model is the only fair source that
+    // scales. The model is unvalidated — downstream dampers
+    // (modelConfidenceFactor, hard disqualifiers, UI honesty label) keep
+    // that read honest.
+    singleBookPolicy: "model" as "block" | "model",
+    // Which source produces the fair probability used to compute edge:
+    //   "market" — de-vigged consensus across bookmakers (legacy).
+    //   "model"  — independent Poisson model whenever it has a probability.
+    //   "auto"   — use model whenever a model probability exists for that
+    //              selection, regardless of book count; fall back to market
+    //              de-vig only when the model has nothing. With 2 aligned
+    //              books market de-vig is not a real consensus, so the
+    //              model is the better reference even when both books quote.
+    fairSource: "auto" as "market" | "model" | "auto",
+    // Confidence multiplier applied whenever the winning selection was priced
+    // against the independent model (source = "model" or "model_single_book").
+    // The model is unvalidated: a model-priced pick must never show the same
+    // confidence as genuine multi-book market agreement. Stacks with
+    // singleBookModelConfidenceFactor when both apply.
+    modelConfidenceFactor: 0.75,
     // Confidence multiplier applied when the winning selection was priced via
     // the independent model against a single book (source = "model_single_book"),
     // or when a single-book selection was valued against the market

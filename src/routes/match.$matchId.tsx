@@ -71,6 +71,7 @@ function MatchDetail() {
     (data.signals as { value?: { audit?: { dataQuality?: string | null } } } | null)
       ?.value?.audit?.dataQuality ?? null;
   const thinData = dq === "single_book" || dq === "model_single_book";
+  const modelPriced = dq === "model" || dq === "model_single_book";
 
   // Reuse the same plain-English phrasing the card uses. "away" → team name.
   const decision = decisionPhrase(data as unknown as MatchCardData);
@@ -134,6 +135,11 @@ function MatchDetail() {
           {thinData ? (
             <p className="caption-mono text-[13px] text-text-muted">
               Thin data · one bookmaker
+            </p>
+          ) : null}
+          {modelPriced ? (
+            <p className="caption-mono text-[13px] text-text-muted">
+              Model-priced · not yet validated
             </p>
           ) : null}
           {data.provisional ? (
@@ -283,9 +289,11 @@ function MatchDetail() {
                     ? "Multi-book"
                     : dq === "single_book"
                       ? "Single book"
-                      : dq === "model_single_book"
-                        ? "Single book (model priced)"
-                        : "—"
+                      : dq === "model"
+                        ? "Model-priced"
+                        : dq === "model_single_book"
+                          ? "Single book (model priced)"
+                          : "—"
                 }
               />
             </div>
