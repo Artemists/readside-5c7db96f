@@ -263,6 +263,56 @@ export async function runScanNow() {
 
       scored.push(scoredMatch);
       stage.scored++;
+
+      // scan:value-audit — first 5 events only. Raw per-book odds + de-vigged
+      // fair probs so we can see WHY edges are what they are.
+      if (valueAuditsLogged < 5) {
+        const vAudit = (scoredMatch.signals as { value?: { audit?: { selections?: Array<{ selection: string; quotes: Array<{ book: string; odds: number; implied: number }>; fairProb: number; bestOdds: number; bestBook: string; bestImplied: number; edgePct: number; evPct: number }>; booksSeen?: string[] } } }).value?.audit;
+        const sels = vAudit?.selections ?? [];
+        const books = vAudit?.booksSeen ?? [];
+        // Reconstruct per-book overround from the winning market's selections.
+        const overroundByBook: Record<string, number> = {};
+        for (const b of books) {
+          let sum = 0;
+          for (const sel of sels) {
+            const q = sel.quotes.find((x) => x.book === b);
+            if (q) sum += 1 / q.odds;
+          }
+          overroundByBook[b] = Math.round(sum * 10000) / 10000;
+        }
+        const selectionDetail = sels.map((sel) => {
+          const perBook = sel.quotes.map((q) => {
+            const overround = overroundByBook[q.book] ?? 0;
+            const devigged = overround > 0 ? (1 / q.odds) / overround : 0;
+            return {
+              book: q.book,
+              odds: q.odds,
+              implied: Math.round(q.implied * 10000) / 10000,
+              devigged: Math.round(devigged * 10000) / 10000,
+            };
+          });
+          return {
+            selection: sel.selection,
+            marketFair: Math.round(sel.fairProb * 10000) / 10000,
+            bestOdds: sel.bestOdds,
+            bestBook: sel.bestBook,
+            bestImplied: Math.round(sel.bestImplied * 10000) / 10000,
+            edgePct: Math.round(sel.edgePct * 100) / 100,
+            evPct: Math.round(sel.evPct * 100) / 100,
+            perBook,
+          };
+        });
+        console.log("scan:value-audit", {
+          eventId: e.id,
+          home: merged.home,
+          away: merged.away,
+          competition: merged.league,
+          booksPriced: books.length,
+          overroundByBook,
+          selections: selectionDetail,
+        });
+        valueAuditsLogged++;
+      }
     } catch (err) {
       console.error("scan: score failed", e.id, err);
       sawFailure = true;
