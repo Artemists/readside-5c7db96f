@@ -418,6 +418,25 @@ export async function runScanNow() {
       context_lt_4: failedContext,
       trap_gte_60: failedTrap,
     },
+    allSelectionEdges: {
+      n: allSelectionEdges.length,
+      positive: edgePositive,
+      nonPositive: edgeNonPositive,
+      mean: allSelectionEdges.length
+        ? Math.round((allSelectionEdges.reduce((a, b) => a + b, 0) / allSelectionEdges.length) * 100) / 100
+        : null,
+      median: pct(allSelectionEdges, 50),
+    },
+    overroundPerBook: {
+      n: overrounds.length,
+      mean: overrounds.length
+        ? Math.round((overrounds.reduce((a, b) => a + b, 0) / overrounds.length) * 10000) / 10000
+        : null,
+      median: overrounds.length ? (() => {
+        const s = [...overrounds].sort((a, b) => a - b);
+        return Math.round(s[Math.floor(s.length / 2)] * 10000) / 10000;
+      })() : null,
+    },
   });
   console.log("scan:trap", {
     trapGate: trapGateCount,
