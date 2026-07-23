@@ -73,16 +73,10 @@ function MorningBriefing() {
 
   const scan = useMutation({
     mutationFn: (force: boolean) => runScan({ data: { force } }),
-    onSuccess: (result) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scan-summary"] });
       qc.invalidateQueries({ queryKey: ["upcoming"] });
       router.invalidate();
-      if (result?.rateLimited) {
-        const next = result.nextAvailableAt
-          ? athensLocalTime(new Date(result.nextAvailableAt))
-          : "later";
-        toast.message(`Rate-limited. Next scan available at ${next}.`);
-      }
     },
     onError: (err) => {
       console.error(err);
@@ -90,17 +84,22 @@ function MorningBriefing() {
     },
   });
 
-  // Auto-run once on first load if — and only if — today has no
-  // successful scan yet.
+  // Auto-run once per page load only. Triggers if today has no successful
+  // scan, or the latest scan is older than the staleness threshold. Never
+  // re-scans on navigation back within the same session — the ref guard
+  // enforces "at most once per mount".
   const autoRan = useRef(false);
   useEffect(() => {
     if (autoRan.current) return;
     const s = summary.data;
     if (!s) return;
     autoRan.current = true;
-    if (!s.hasSuccessfulScan) scan.mutate(false);
+    const stale =
+      !!s.lastScanAt &&
+      Date.now() - new Date(s.lastScanAt).getTime() > 30 * 60 * 1000;
+    if (!s.hasSuccessfulScan || stale) scan.mutate(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary.data?.hasSuccessfulScan]);
+  }, [summary.data?.hasSuccessfulScan, summary.data?.lastScanAt]);
 
 
   const s = summary.data;
@@ -108,11 +107,11 @@ function MorningBriefing() {
   const conditions = deriveConditions(s?.market);
   const scanning = scan.isPending;
 
-  const nextForceAt = s?.nextForceAvailableAt ? new Date(s.nextForceAvailableAt) : null;
-  const forceBlocked = !!nextForceAt && nextForceAt.getTime() > Date.now();
-
   const showDegradedNotice = !!s?.degraded && !!s?.hasSuccessfulScan;
   const showNoScanNotice = !s?.hasSuccessfulScan;
+  const lastScanLabel = s?.lastScanAt
+    ? athensLocalTime(new Date(s.lastScanAt))
+    : null;
 
   const [conditionsOpen, setConditionsOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
@@ -126,26 +125,19 @@ function MorningBriefing() {
     <div className="mx-auto w-full max-w-[480px] px-4 py-6 sm:px-6 sm:py-10">
       <Card className="gap-5 p-4 sm:p-6">
         {/* Greeting row */}
-        <div className="flex h-[60px] items-center justify-between gap-3">
-          <h1 className="text-[32px] font-bold leading-none tracking-[-0.02em] text-text-primary">
+        <div className="flex min-h-[60px] items-center justify-between gap-3">
+          <h1 className="text-[28px] font-bold leading-none tracking-[-0.02em] text-text-primary">
             Good morning.
           </h1>
           {scanning ? (
             <Spinner label="Scanning…" />
-          ) : forceBlocked && nextForceAt ? (
-            <span className="caption-mono text-[11px] text-text-muted">
-              Next at {athensLocalTime(nextForceAt)}
+          ) : lastScanLabel ? (
+            <span className="caption-mono shrink-0 text-[13px] text-text-muted">
+              Updated {lastScanLabel}
             </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => scan.mutate(true)}
-              className="caption-mono min-h-[44px] px-1 text-[11px] text-text-muted transition-colors hover:text-text-primary"
-            >
-              Rescan
-            </button>
-          )}
+          ) : null}
         </div>
+
 
         {showDegradedNotice && s ? (
           <WarningBadge>
