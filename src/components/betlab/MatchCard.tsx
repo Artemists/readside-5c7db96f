@@ -205,6 +205,11 @@ export function MatchCard({ m }: { m: MatchCardData }) {
           ? "Pass · not advised"
           : `${m.stake ?? "Pass"} · ${confidenceLabel(confidence)}${isPass ? " read" : " confidence"}`}
       </p>
+      {dataQualityOf(m) === "single_book" || dataQualityOf(m) === "model_single_book" ? (
+        <p className="caption-mono mt-1 text-[12px] text-text-disabled">
+          Thin data · one bookmaker
+        </p>
+      ) : null}
       {m.provisional ? (
         <p className="caption-mono mt-1 text-[12px] text-text-disabled">
           Provisional · price may move
