@@ -179,6 +179,8 @@ function explosionScore(
 
 // -------------------- Value (0..100) --------------------
 type BookQuote = { book: string; odds: number; implied: number };
+type SelectionSource = "market" | "single_book_market" | "model_single_book";
+type DataQuality = "multi_book" | "single_book" | "model_single_book";
 type SelectionAudit = {
   selection: string;
   quotes: BookQuote[];
@@ -190,7 +192,8 @@ type SelectionAudit = {
   evPct: number;
   eligible: boolean;
   disqualifier: string | null;
-  source: "market" | "model_single_book";
+  source: SelectionSource;
+  dataQuality: DataQuality;
 };
 
 type ValueResult = {
@@ -202,13 +205,14 @@ type ValueResult = {
   impliedProb: number | null;
   evPercent: number | null;
   note: string;
-  winnerSource: SelectionAudit["source"] | null;
+  winnerSource: SelectionSource | null;
   audit: {
     booksSeen: string[];
     hasDraw: boolean;
     selections: SelectionAudit[];
     winner: string | null;
-    winnerSource: SelectionAudit["source"] | null;
+    winnerSource: SelectionSource | null;
+    dataQuality: DataQuality | null;
     disqualifier: string | null;
   };
 };
