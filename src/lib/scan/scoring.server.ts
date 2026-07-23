@@ -457,11 +457,12 @@ function buildReasoning(
   return `${prefix}${edge} Context: ${parts.ctx}. Explosion: ${parts.exp}. Value: ${parts.val}. Trap: ${parts.trap}.`;
 }
 
-export function scoreEvent(event: OddsEvent): ScoredMatch {
+export function scoreEvent(event: OddsEvent, opts: { debugLines?: boolean } = {}): ScoredMatch {
+  const debug = !!opts.debugLines;
   const quotes = extractMoneylines(event);
-  const totalsQuotes = extractTotals(event);
-  const cornersQuotes = extractCorners(event);
-  const cardsQuotes = extractCards(event);
+  const totalsQuotes = extractTotals(event, debug);
+  const cornersQuotes = extractCorners(event, debug);
+  const cardsQuotes = extractCards(event, debug);
   const ctx = contextScore(event);
   const mlMarket = evaluateMoneyline(quotes);
   const totalsMarket = evaluateTotals(totalsQuotes);
