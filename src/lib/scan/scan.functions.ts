@@ -182,6 +182,11 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
       // Displayed-scan metadata (falls back to last successful).
       lastScanAt: (lastOk ?? latest)?.scanned_at ?? null,
       fixturesCount: (lastOk ?? latest)?.fixtures_count ?? list.length,
+      // Latest attempt regardless of outcome — so the UI can honestly show
+      // when we last tried, even if that attempt scored zero.
+      lastAttemptAt: latest?.scanned_at ?? null,
+      lastAttemptStatus: latest?.status ?? null,
+      lastAttemptFixtures: latest?.fixtures_count ?? null,
       counts,
       topEdge,
       market: { avgAbsEv, avgImplied, sampleSize: hasSuccessfulScan ? list.length : 0 },
