@@ -294,29 +294,34 @@ export async function runScanNow() {
       if (pmActive) {
         pmStats.attempted++;
         let pmProbs: PolymarketProbs | null = pmCache.get(e.id) ?? null;
+        let pmReason: "no_markets" | "no_match" | "ambiguous_shape" | null = null;
         if (pmProbs) {
           pmStats.cached++;
-        } else if (pmMarkets.length > 0) {
+        } else if (pmMarkets.length === 0) {
+          pmStats.noMarket++;
+          pmReason = "no_markets";
+        } else {
           const found = matchToPolymarket(merged.home, merged.away, merged.date ?? null, pmMarkets);
           if (!found) {
             pmStats.noMarket++;
+            pmReason = "no_match";
           } else {
             const kickoffMs = merged.date ? Date.parse(merged.date) : NaN;
             const endMs = found.endDate ? Date.parse(found.endDate) : NaN;
             if (Number.isFinite(kickoffMs) && Number.isFinite(endMs) && Math.abs(endMs - kickoffMs) > 48 * 3600 * 1000) {
               pmStats.staleEndDate++;
+              pmReason = "no_match";
             } else {
               const probs = polymarketProbabilities(found, merged.home, merged.away);
               if (!probs) {
                 pmStats.ambiguousShape++;
+                pmReason = "ambiguous_shape";
               } else {
                 pmProbs = probs;
                 pmToStore.push({ matchId: e.id, probs });
               }
             }
           }
-        } else {
-          pmStats.noMarket++;
         }
 
         if (pmProbs) {
@@ -354,6 +359,13 @@ export async function runScanNow() {
             };
           }
           for (const d of disagreementsHere) pmStats.disagreements.push(d);
+          // Shadow edge for the RECOMMENDED selection only.
+          const recSel = (scoredMatch as { recommendedSelection?: string | null }).recommendedSelection;
+          const recKey = recSel ? recSel.toLowerCase() : null;
+          const recShadow = recKey ? shadowEdges[recKey] : undefined;
+          if (recShadow && recShadow.pmEdgePct != null) {
+            pmStats.shadowEdges.push(recShadow.pmEdgePct);
+          }
 
           (scoredMatch.signals as Record<string, unknown>).polymarket = {
             matched: true,
@@ -367,12 +379,18 @@ export async function runScanNow() {
               away: Math.round(pmProbs.away * 10000) / 10000,
             },
             shadowEdges,
+            recommendedShadowEdgePct: recShadow?.pmEdgePct ?? null,
             policy: polymarketPolicy,
           };
         } else {
-          (scoredMatch.signals as Record<string, unknown>).polymarket = { matched: false, policy: polymarketPolicy };
+          (scoredMatch.signals as Record<string, unknown>).polymarket = {
+            matched: false,
+            reason: pmReason ?? "no_markets",
+            policy: polymarketPolicy,
+          };
         }
       }
+
 
       scored.push(scoredMatch);
       stage.scored++;
