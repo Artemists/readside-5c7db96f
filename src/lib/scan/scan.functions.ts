@@ -219,7 +219,7 @@ export const getMatchSignals = createServerFn({ method: "GET" })
   });
 
 const UPCOMING_COLUMNS =
-  "match_id, home, away, kickoff, competition, sport, verdict, ev_percent, edge_percent, value_score, trap_score, context_score, confidence, stake, recommended_market, recommended_selection, best_odds, provisional";
+  "match_id, home, away, kickoff, competition, sport, verdict, ev_percent, edge_percent, value_score, trap_score, context_score, explosion_score, confidence, stake, recommended_market, recommended_selection, best_odds, fair_probability, implied_probability, provisional, signals";
 
 function windowBounds() {
   const now = new Date();
