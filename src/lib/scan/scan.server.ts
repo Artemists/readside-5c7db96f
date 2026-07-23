@@ -250,7 +250,7 @@ export async function runScanNow() {
       let modelReason: ModelFailure | null = null;
       let avgUsed: number | null = null;
       let avgSource: "perCompetition" | "global" = "global";
-      const { inputs, reason } = await getModelInputs(merged.home, merged.away);
+      const { inputs, reason } = await getModelInputs(merged.home, merged.away, lookupStats);
       if (!inputs) {
         modelReason = reason ?? null;
       } else {
