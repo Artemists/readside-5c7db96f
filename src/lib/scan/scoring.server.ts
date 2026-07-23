@@ -229,13 +229,14 @@ function evaluateSelections(
   selections: readonly string[],
   perBookOdds: number[][],
   books: string[],
+  modelFair: Array<number | null> | null,
 ): { audits: SelectionAudit[]; eligibleWinner: SelectionAudit | null; fallbackByEv: SelectionAudit | null } {
   const cfg = SCORING.value;
   if (perBookOdds.length === 0) {
     return { audits: [], eligibleWinner: null, fallbackByEv: null };
   }
   const perBookFair = perBookOdds.map((row) => devig(row));
-  const fair = selections.map((_, i) => {
+  const marketFair = selections.map((_, i) => {
     const vals = perBookFair.map((row) => row[i]);
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   });
@@ -246,16 +247,28 @@ function evaluateSelections(
       implied: 1 / row[i],
     }));
     const best = priced.reduce((a, b) => (a.odds > b.odds ? a : b));
-    const edgePct = ((fair[i] - best.implied) / best.implied) * 100;
-    const evPct = (fair[i] * (best.odds - 1) - (1 - fair[i])) * 100;
+    let source: SelectionAudit["source"] = "market";
+    let selFair = marketFair[i];
     let disqualifier: string | null = null;
-    if (priced.length < cfg.minBooksForValue) disqualifier = "single_book";
-    else if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
-    else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    if (priced.length < cfg.minBooksForValue) {
+      const modelP = modelFair?.[i] ?? null;
+      if (cfg.singleBookPolicy === "model" && modelP != null && modelP > 0 && modelP < 1) {
+        source = "model_single_book";
+        selFair = modelP;
+      } else {
+        disqualifier = "single_book";
+      }
+    }
+    const edgePct = ((selFair - best.implied) / best.implied) * 100;
+    const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
+    if (disqualifier === null) {
+      if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
+      else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    }
     return {
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
-      fairProb: fair[i],
+      fairProb: selFair,
       bestOdds: best.odds,
       bestBook: best.book,
       bestImplied: best.implied,
@@ -263,6 +276,7 @@ function evaluateSelections(
       evPct,
       eligible: disqualifier === null,
       disqualifier,
+      source,
     };
   });
   const eligible = audits.filter((a) => a.eligible);
