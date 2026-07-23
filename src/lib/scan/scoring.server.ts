@@ -544,10 +544,9 @@ export function scoreEvent(
 
   const verdict = decideVerdict(ctx.score, val.score, trap.score);
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
-  const singleBookPenalty =
-    val.winnerSource === "model_single_book"
-      ? SCORING.value.singleBookModelConfidenceFactor
-      : 1;
+  const thinData =
+    val.winnerSource === "model_single_book" || val.winnerSource === "single_book_market";
+  const singleBookPenalty = thinData ? SCORING.value.singleBookModelConfidenceFactor : 1;
   const confidence = Math.round(clamp(confidenceRaw * singleBookPenalty, 1, 10) * 10) / 10;
 
   const stake =
