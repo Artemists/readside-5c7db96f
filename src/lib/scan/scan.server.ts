@@ -48,6 +48,14 @@ export async function runScanNow() {
   const localDate = athensLocalDate();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+  // Settle finished matches first so results are always fresh.
+  try {
+    const { settleFinishedMatches } = await import("@/lib/settle/settle.server");
+    await settleFinishedMatches();
+  } catch (err) {
+    console.error("settle: failed at scan start", err);
+  }
+
   let apiCalls = 0;
   let sawRateLimit = false;
   let sawFailure = false;
