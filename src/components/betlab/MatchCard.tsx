@@ -54,7 +54,7 @@ function confidenceLabel(c: number | null): string {
   return "High";
 }
 
-function decisionPhrase(m: MatchCardData): string {
+export function decisionPhrase(m: MatchCardData): string {
   const market = (m.recommended_market ?? "").toLowerCase();
   const sel = m.recommended_selection ?? "";
   if (!sel) return "Awaiting selection";

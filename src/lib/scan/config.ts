@@ -11,19 +11,27 @@ export const SCORING = {
     // Generic name-only matches (e.g. bare "serie a", "premier") are intentionally
     // NOT tier 1 — a league called "Serie A" outside Italy is not the Italian top flight.
     tierKeywords: [
+      // Hard downgrades — regional, youth, reserve, semi-pro. Match FIRST so
+      // they beat any generic "premier"/"liga" fallback below.
+      { match: /\b(reserves?|youth|u-?15|u-?17|u-?19|u-?20|u-?21|u-?23|academy|primavera|regional|state league|northern territory|tasmania|capital territory|npl\b|amateur|semi[- ]?pro|third division|3\. liga|serie c|serie d|national league north|national league south|isthmian|conference (north|south)|oberliga|regionalliga|liga 3|segunda b|primera federaci[oó]n|tercera|friendl(y|ies))\b/i, tier: 0.15 },
+      // Women's football: only top-tier competitions are tier 1; other women's leagues stay mid.
+      { match: /\bwomen('s)?\b.*\b(world cup|champions league|euro)\b|\b(w-?league|wsl|nwsl|frauen-bundesliga)\b/i, tier: 0.8 },
+      { match: /\bwomen('s)?\b/i, tier: 0.35 },
       // Global / continental elite
       { match: /\b(fifa\s+)?world cup\b|uefa champions league|uefa europa league|copa america|euro(pean)? championship|super bowl|nba finals|nba playoffs|wnba finals|wnba playoffs|wimbledon|us open|roland[- ]?garros|australian open|the masters|the open championship/i, tier: 1.0 },
-      // Top-5 European football leagues, country-qualified
+      // Top-5 European football leagues, country-qualified.
+      // "premier league" is tier-1 ONLY when qualified as England/English.
       { match: /(^|[^a-z])(england|english)[^a-z].*premier league|(^|[^a-z])spain[^a-z].*(la\s*liga|primera divisi[oó]n)|(^|[^a-z])italy[^a-z].*serie a\b|(^|[^a-z])germany[^a-z].*bundesliga\b|(^|[^a-z])france[^a-z].*ligue 1\b/i, tier: 1.0 },
       // Strong second tier — major North American / South American / European cups
-      { match: /\bnba\b|\bwnba\b|\bmlb\b|\bnhl\b|\bnfl\b|(^|[^a-z])portugal[^a-z].*primeira|(^|[^a-z])netherlands[^a-z].*eredivisie|(^|[^a-z])england[^a-z].*championship|liga mx|copa libertadores|copa sudamericana|euroleague|\batp\b|\bwta\b|uefa conference league|fa cup|coupe de france|copa del rey|dfb[- ]pokal|coppa italia/i, tier: 0.75 },
+      { match: /\bnba\b|\bwnba\b|\bmlb\b|\bnhl\b|\bnfl\b|(^|[^a-z])portugal[^a-z].*primeira|(^|[^a-z])netherlands[^a-z].*eredivisie|(^|[^a-z])england[^a-z].*championship|liga mx|copa libertadores|copa sudamericana|euroleague|\batp\b|\bwta\b|uefa conference league|fa cup|coupe de france|copa del rey|dfb[- ]pokal|coppa italia/i, tier: 0.7 },
       // Mid tier known leagues
-      { match: /brasileir(o|ao|ão)|argentin(a|e).*primera|j[.\s-]?league|k[.\s-]?league|\bmls\b|challenger|(^|[^a-z])scotland[^a-z].*premiership|(^|[^a-z])belgium[^a-z].*(pro league|jupiler)|(^|[^a-z])turkey[^a-z].*s(ü|u)per lig|primeira liga|(^|[^a-z])switzerland[^a-z].*super league/i, tier: 0.55 },
-      // Very generic keyword fallback — weak signal, must not lift obscure leagues to tier 1.
-      { match: /\b(liga|serie|division|premier|super|cup|coupe|copa)\b/i, tier: 0.35 },
+      { match: /brasileir(o|ao|ão)\s*serie a|(^|[^a-z])argentin(a|e)[^a-z].*(primera|liga profesional)|j1[- ]?league|k[- ]?league\s*1|\bmls\b|challenger tour|(^|[^a-z])scotland[^a-z].*premiership|(^|[^a-z])belgium[^a-z].*(pro league|jupiler)|(^|[^a-z])turkey[^a-z].*s(ü|u)per lig|(^|[^a-z])portugal[^a-z].*primeira liga|(^|[^a-z])switzerland[^a-z].*super league/i, tier: 0.5 },
+      // Weak keyword fallback — deliberately low so obscure/regional leagues
+      // matching only "premier" or "liga" never reach a high tier.
+      { match: /\b(liga|serie|division|premier|super|cup|coupe|copa)\b/i, tier: 0.25 },
     ],
     // Unknown competition → low tier so it produces spread against known leagues.
-    tierDefault: 0.2,
+    tierDefault: 0.15,
     weights: { markets: 0.30, bookmakers: 0.20, tier: 0.50 },
     marketsCap: 4,       // 4+ markets => full points
     bookmakersCap: 2,    // plan allows 2 bookmakers max
