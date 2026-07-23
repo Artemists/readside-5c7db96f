@@ -117,6 +117,10 @@ export async function findTeamId(
     }
   }
 
+  // Circuit-break: once we hit a rate limit during this scan, don't burn
+  // more requests — every subsequent call will hit the same wall.
+  if (stats?.rateLimited) return null;
+
   const tryQuery = async (
     q: string,
   ): Promise<{ id: number | null; hits: Array<{ team?: { id?: number; name?: string } }>; rejectedByExactMatch: boolean }> => {
@@ -127,8 +131,6 @@ export async function findTeamId(
     );
     const pick = exact ?? hits[0];
     const id = pick.team?.id ?? null;
-    // Only "rejected by exact match" if hits exist but nothing exact matched
-    // AND we ended up with no id (defensive — pick is hits[0] as fallback).
     const rejectedByExactMatch = !exact && hits.length > 0;
     return { id: id ?? null, hits, rejectedByExactMatch };
   };
@@ -148,13 +150,10 @@ export async function findTeamId(
   };
 
   try {
-    // Primary: the ORIGINAL name (do not pre-strip FC/CF/etc — the API
-    // uses full names in its own search index).
     const primary = await tryQuery(name.trim());
     let picked = primary;
     let queryUsed = name.trim();
 
-    // Fallback: retry once with the normalised form only if primary was empty.
     if (primary.hits.length === 0) {
       const fallback = await tryQuery(norm);
       if (fallback.hits.length > 0 || fallback.id != null) {
@@ -183,7 +182,24 @@ export async function findTeamId(
     });
     return picked.id;
   } catch (err) {
-    console.error("model: findTeamId failed for", name, err);
+    const status = err instanceof ApiFootballError ? err.status : 0;
+    if (stats) {
+      stats.apiErrors++;
+      if (status === 429) stats.rateLimited = true;
+      recordDebug({
+        name,
+        query: name.trim(),
+        hits: 0,
+        hitNames: [],
+        rejectedByExactMatch: false,
+        apiError: status ? `HTTP ${status}` : String(err),
+      });
+    }
+    // Don't spam the console with the same 429 repeatedly.
+    if (status !== 429 || (stats && stats.apiErrors <= 1)) {
+      console.error("model: findTeamId failed for", name, err);
+    }
+    // Do NOT persist as not_found — the team may exist; the API refused us.
     return null;
   }
 }
