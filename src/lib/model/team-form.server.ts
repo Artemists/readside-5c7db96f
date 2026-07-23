@@ -239,6 +239,16 @@ async function writeFormCache(teamId: number, payload: CachedForm): Promise<void
   });
 }
 
+// Raw shape returned by API-Football under `response`.
+type ApiFixture = {
+  fixture: { id: number; date: string; status?: { short?: string } };
+  teams: {
+    home: { id: number; name: string; winner?: boolean | null };
+    away: { id: number; name: string; winner?: boolean | null };
+  };
+  goals: { home: number | null; away: number | null };
+};
+
 async function fetchTeamFixtures(
   teamId: number,
   limit: number,
@@ -250,9 +260,13 @@ async function fetchTeamFixtures(
     const body = (await apiGet(
       `/fixtures?team=${teamId}&last=${limit}`,
       key,
-    )) as CachedForm;
-    await writeFormCache(teamId, body);
-    return body;
+    )) as { response?: ApiFixture[] };
+    // Normalise at the fetch boundary: API-Football returns rows under
+    // `response`. We cache in our own `{ fixtures: [...] }` shape so cached
+    // payloads stay stable if the API ever adds sibling fields.
+    const normalised: CachedForm = { fixtures: body.response ?? [] };
+    await writeFormCache(teamId, normalised);
+    return normalised;
   } catch (err) {
     console.error("model: fetchTeamFixtures failed", teamId, err);
     return null;
@@ -313,8 +327,8 @@ export async function getHeadToHead(
     const body = (await apiGet(
       `/fixtures/headtohead?h2h=${homeId}-${awayId}&last=${limit}`,
       key,
-    )) as CachedForm;
-    return (body.fixtures ?? body.fixtures ?? [])
+    )) as { response?: ApiFixture[] };
+    return (body.response ?? [])
       .filter((f) => f.goals.home != null && f.goals.away != null)
       .slice(0, limit)
       .map((f) => ({
