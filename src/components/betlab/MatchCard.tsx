@@ -21,7 +21,13 @@ export type MatchCardData = {
   ev_percent?: number | string | null;
   fair_probability?: number | string | null;
   implied_probability?: number | string | null;
+  signals?: unknown;
 };
+
+function dataQualityOf(m: MatchCardData): string | null {
+  const s = m.signals as { value?: { audit?: { dataQuality?: string | null } } } | null;
+  return s?.value?.audit?.dataQuality ?? null;
+}
 
 const n = (v: unknown): number | null => {
   if (v == null) return null;
