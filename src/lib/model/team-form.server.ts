@@ -42,7 +42,41 @@ async function apiGet(path: string, key: string): Promise<unknown> {
 
 // -------------------- findTeamId --------------------
 
-export async function findTeamId(name: string): Promise<number | null> {
+const NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export type TeamLookupDebug = {
+  name: string;
+  query: string;
+  hits: number;
+  hitNames: string[];
+  rejectedByExactMatch: boolean;
+};
+
+export type TeamLookupStats = {
+  negativeCacheHits: number;
+  debug: TeamLookupDebug[];
+  debugCap: number;
+};
+
+export function makeLookupStats(debugCap = 3): TeamLookupStats {
+  return { negativeCacheHits: 0, debug: [], debugCap };
+}
+
+async function searchTeams(
+  key: string,
+  query: string,
+): Promise<Array<{ team?: { id?: number; name?: string } }>> {
+  const body = (await apiGet(
+    `/teams?search=${encodeURIComponent(query)}`,
+    key,
+  )) as { response?: Array<{ team?: { id?: number; name?: string } }> };
+  return body.response ?? [];
+}
+
+export async function findTeamId(
+  name: string,
+  stats?: TeamLookupStats,
+): Promise<number | null> {
   const key = readKey();
   if (!key) return null;
   const norm = normaliseName(name);
@@ -51,29 +85,86 @@ export async function findTeamId(name: string): Promise<number | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: cached } = await supabaseAdmin
     .from("team_ids")
-    .select("team_id")
+    .select("team_id, not_found, resolved_at")
     .eq("name", norm)
     .maybeSingle();
-  if (cached?.team_id) return cached.team_id;
+  if (cached) {
+    if (cached.team_id && !cached.not_found) return cached.team_id;
+    if (cached.not_found) {
+      const age = Date.now() - new Date(cached.resolved_at).getTime();
+      if (age < NEGATIVE_CACHE_TTL_MS) {
+        if (stats) stats.negativeCacheHits++;
+        return null;
+      }
+      // TTL expired — allow one retry below.
+    }
+  }
 
-  try {
-    const body = (await apiGet(
-      `/teams?search=${encodeURIComponent(norm)}`,
-      key,
-    )) as { response?: Array<{ team?: { id?: number; name?: string } }> };
-    const hits = body.response ?? [];
-    if (!hits.length) return null;
-    // Prefer exact-normalised match on returned team.name.
+  const tryQuery = async (
+    q: string,
+  ): Promise<{ id: number | null; hits: Array<{ team?: { id?: number; name?: string } }>; rejectedByExactMatch: boolean }> => {
+    const hits = await searchTeams(key, q);
+    if (!hits.length) return { id: null, hits, rejectedByExactMatch: false };
     const exact = hits.find(
       (h) => h.team?.name && normaliseName(h.team.name) === norm,
     );
     const pick = exact ?? hits[0];
     const id = pick.team?.id ?? null;
-    if (!id) return null;
-    await supabaseAdmin
-      .from("team_ids")
-      .upsert({ name: norm, team_id: id, resolved_at: new Date().toISOString() });
-    return id;
+    // Only "rejected by exact match" if hits exist but nothing exact matched
+    // AND we ended up with no id (defensive — pick is hits[0] as fallback).
+    const rejectedByExactMatch = !exact && hits.length > 0;
+    return { id: id ?? null, hits, rejectedByExactMatch };
+  };
+
+  const recordDebug = (entry: TeamLookupDebug) => {
+    if (!stats) return;
+    if (stats.debug.length < stats.debugCap) stats.debug.push(entry);
+  };
+
+  const persistNotFound = async () => {
+    await supabaseAdmin.from("team_ids").upsert({
+      name: norm,
+      team_id: null,
+      not_found: true,
+      resolved_at: new Date().toISOString(),
+    });
+  };
+
+  try {
+    // Primary: the ORIGINAL name (do not pre-strip FC/CF/etc — the API
+    // uses full names in its own search index).
+    const primary = await tryQuery(name.trim());
+    let picked = primary;
+    let queryUsed = name.trim();
+
+    // Fallback: retry once with the normalised form only if primary was empty.
+    if (primary.hits.length === 0) {
+      const fallback = await tryQuery(norm);
+      if (fallback.hits.length > 0 || fallback.id != null) {
+        picked = fallback;
+        queryUsed = norm;
+      }
+    }
+
+    if (picked.id == null) {
+      recordDebug({
+        name,
+        query: queryUsed,
+        hits: picked.hits.length,
+        hitNames: picked.hits.slice(0, 5).map((h) => h.team?.name ?? "?"),
+        rejectedByExactMatch: picked.rejectedByExactMatch,
+      });
+      await persistNotFound();
+      return null;
+    }
+
+    await supabaseAdmin.from("team_ids").upsert({
+      name: norm,
+      team_id: picked.id,
+      not_found: false,
+      resolved_at: new Date().toISOString(),
+    });
+    return picked.id;
   } catch (err) {
     console.error("model: findTeamId failed for", name, err);
     return null;
