@@ -145,6 +145,7 @@ export async function runScanNow() {
   const scored: ScoredMatch[] = [];
   let reused = 0;
   let diagLogged = 0;
+  let valueAuditsLogged = 0;
   const marketTally = { moneyline: 0, totals: 0, corners: 0, cards: 0 };
   let shadowOk = 0;
   const shadowFail: Record<ModelFailure, number> = {
@@ -262,6 +263,56 @@ export async function runScanNow() {
 
       scored.push(scoredMatch);
       stage.scored++;
+
+      // scan:value-audit — first 5 events only. Raw per-book odds + de-vigged
+      // fair probs so we can see WHY edges are what they are.
+      if (valueAuditsLogged < 5) {
+        const vAudit = (scoredMatch.signals as { value?: { audit?: { selections?: Array<{ selection: string; quotes: Array<{ book: string; odds: number; implied: number }>; fairProb: number; bestOdds: number; bestBook: string; bestImplied: number; edgePct: number; evPct: number }>; booksSeen?: string[] } } }).value?.audit;
+        const sels = vAudit?.selections ?? [];
+        const books = vAudit?.booksSeen ?? [];
+        // Reconstruct per-book overround from the winning market's selections.
+        const overroundByBook: Record<string, number> = {};
+        for (const b of books) {
+          let sum = 0;
+          for (const sel of sels) {
+            const q = sel.quotes.find((x) => x.book === b);
+            if (q) sum += 1 / q.odds;
+          }
+          overroundByBook[b] = Math.round(sum * 10000) / 10000;
+        }
+        const selectionDetail = sels.map((sel) => {
+          const perBook = sel.quotes.map((q) => {
+            const overround = overroundByBook[q.book] ?? 0;
+            const devigged = overround > 0 ? (1 / q.odds) / overround : 0;
+            return {
+              book: q.book,
+              odds: q.odds,
+              implied: Math.round(q.implied * 10000) / 10000,
+              devigged: Math.round(devigged * 10000) / 10000,
+            };
+          });
+          return {
+            selection: sel.selection,
+            marketFair: Math.round(sel.fairProb * 10000) / 10000,
+            bestOdds: sel.bestOdds,
+            bestBook: sel.bestBook,
+            bestImplied: Math.round(sel.bestImplied * 10000) / 10000,
+            edgePct: Math.round(sel.edgePct * 100) / 100,
+            evPct: Math.round(sel.evPct * 100) / 100,
+            perBook,
+          };
+        });
+        console.log("scan:value-audit", {
+          eventId: e.id,
+          home: merged.home,
+          away: merged.away,
+          competition: merged.league,
+          booksPriced: books.length,
+          overroundByBook,
+          selections: selectionDetail,
+        });
+        valueAuditsLogged++;
+      }
     } catch (err) {
       console.error("scan: score failed", e.id, err);
       sawFailure = true;
@@ -290,6 +341,9 @@ export async function runScanNow() {
   const disqCounts = { long_shot: 0, suspicious_edge: 0, no_market: 0 };
   const dqCounts = { multi_book: 0, single_book: 0, model_single_book: 0 };
   const edgePctsMulti: number[] = [];
+  const allSelectionEdges: number[] = [];
+  const overrounds: number[] = [];
+  let edgePositive = 0, edgeNonPositive = 0;
   const valueScores: number[] = [];
   const trapScores: number[] = [];
   const favImplieds: number[] = [];
@@ -300,14 +354,30 @@ export async function runScanNow() {
     valueScores.push(s.valueScore);
     trapScores.push(s.trapScore);
     const sig = s.signals as {
-      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; selections?: Array<{ dataQuality?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean }> } };
+      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; booksSeen?: string[]; selections?: Array<{ dataQuality?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean; quotes?: Array<{ book: string; odds: number }> }> } };
       trap?: { favImplied?: number | null };
     };
     const dq = sig.value?.audit?.dataQuality;
     if (dq && dq in dqCounts) dqCounts[dq as keyof typeof dqCounts]++;
     const disq = sig.value?.audit?.disqualifier;
     if (disq && disq in disqCounts) disqCounts[disq as keyof typeof disqCounts]++;
-    for (const sel of sig.value?.audit?.selections ?? []) {
+    const sels = sig.value?.audit?.selections ?? [];
+    const books = sig.value?.audit?.booksSeen ?? [];
+    for (const b of books) {
+      let sum = 0;
+      let has = false;
+      for (const sel of sels) {
+        const q = sel.quotes?.find((x) => x.book === b);
+        if (q) { sum += 1 / q.odds; has = true; }
+      }
+      if (has) overrounds.push(sum);
+    }
+    for (const sel of sels) {
+      if (typeof sel.edgePct === "number") {
+        allSelectionEdges.push(sel.edgePct);
+        if (sel.edgePct > 0) edgePositive++;
+        else edgeNonPositive++;
+      }
       if (sel.dataQuality === "multi_book" && sel.eligible && typeof sel.edgePct === "number") {
         edgePctsMulti.push(sel.edgePct);
       }
@@ -347,6 +417,25 @@ export async function runScanNow() {
       value_lt_70: failedValue,
       context_lt_4: failedContext,
       trap_gte_60: failedTrap,
+    },
+    allSelectionEdges: {
+      n: allSelectionEdges.length,
+      positive: edgePositive,
+      nonPositive: edgeNonPositive,
+      mean: allSelectionEdges.length
+        ? Math.round((allSelectionEdges.reduce((a, b) => a + b, 0) / allSelectionEdges.length) * 100) / 100
+        : null,
+      median: pct(allSelectionEdges, 50),
+    },
+    overroundPerBook: {
+      n: overrounds.length,
+      mean: overrounds.length
+        ? Math.round((overrounds.reduce((a, b) => a + b, 0) / overrounds.length) * 10000) / 10000
+        : null,
+      median: overrounds.length ? (() => {
+        const s = [...overrounds].sort((a, b) => a - b);
+        return Math.round(s[Math.floor(s.length / 2)] * 10000) / 10000;
+      })() : null,
     },
   });
   console.log("scan:trap", {
