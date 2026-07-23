@@ -58,16 +58,25 @@ export type TeamLookupDebug = {
   hits: number;
   hitNames: string[];
   rejectedByExactMatch: boolean;
+  apiError?: string;
 };
 
 export type TeamLookupStats = {
   negativeCacheHits: number;
+  apiErrors: number;
+  rateLimited: boolean;
   debug: TeamLookupDebug[];
   debugCap: number;
 };
 
 export function makeLookupStats(debugCap = 3): TeamLookupStats {
-  return { negativeCacheHits: 0, debug: [], debugCap };
+  return {
+    negativeCacheHits: 0,
+    apiErrors: 0,
+    rateLimited: false,
+    debug: [],
+    debugCap,
+  };
 }
 
 async function searchTeams(
