@@ -283,7 +283,7 @@ export async function runScanNow() {
   const pct = (arr: number[], p: number): number | null => {
     if (arr.length === 0) return null;
     const s = [...arr].sort((a, b) => a - b);
-    const idx = clampInt(Math.round((p / 100) * (s.length - 1)), 0, s.length - 1);
+    const idx = Math.max(0, Math.min(s.length - 1, Math.round((p / 100) * (s.length - 1))));
     return Math.round(s[idx] * 100) / 100;
   };
   const verdictCounts = { opportunity: 0, trap: 0, ignore: 0 };
