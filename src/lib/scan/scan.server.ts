@@ -625,7 +625,13 @@ export async function runScanNow() {
         ? Math.round(meanAbsModelMarketDiff * 10000) / 10000
         : null,
     },
+    teamLookup: {
+      negativeCacheHits: lookupStats.negativeCacheHits,
+    },
   });
+  for (const d of lookupStats.debug) {
+    console.log("scan:team-unresolved", d);
+  }
   console.log("scan:funnel", {
     scored: scored.length,
     verdicts: verdictCounts,
