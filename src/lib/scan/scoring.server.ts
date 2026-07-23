@@ -190,6 +190,7 @@ type SelectionAudit = {
   evPct: number;
   eligible: boolean;
   disqualifier: string | null;
+  source: "market" | "model_single_book";
 };
 
 type ValueResult = {
@@ -201,11 +202,13 @@ type ValueResult = {
   impliedProb: number | null;
   evPercent: number | null;
   note: string;
+  winnerSource: SelectionAudit["source"] | null;
   audit: {
     booksSeen: string[];
     hasDraw: boolean;
     selections: SelectionAudit[];
     winner: string | null;
+    winnerSource: SelectionAudit["source"] | null;
     disqualifier: string | null;
   };
 };
