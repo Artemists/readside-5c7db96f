@@ -144,7 +144,12 @@ function MorningBriefing() {
 
 
   const [conditionsOpen, setConditionsOpen] = useState(false);
-  const [diagOpen, setDiagOpen] = useState(false);
+  // Auto-expand diagnostics when the latest attempt scored zero so the
+  // funnel is visible without the user needing to know to look for it.
+  const [diagOpen, setDiagOpen] = useState(latestZeroFixtures);
+  useEffect(() => {
+    if (latestZeroFixtures) setDiagOpen(true);
+  }, [latestZeroFixtures]);
 
   const groupedUpcoming = useMemo(
     () => groupByDay(upcoming.data ?? []),
@@ -161,9 +166,19 @@ function MorningBriefing() {
           </h1>
           {scanning ? (
             <Spinner label="Scanning…" />
-          ) : lastScanLabel ? (
-            <span className="caption-mono shrink-0 text-[13px] text-text-muted">
-              Updated {lastScanLabel}
+          ) : attemptLabel ? (
+            <span
+              className={
+                "caption-mono shrink-0 text-right text-[13px] " +
+                (attemptLabel.warn ? "text-accent-dim" : "text-text-muted")
+              }
+            >
+              {attemptLabel.text}
+              {successLabel ? (
+                <span className="block text-text-disabled">
+                  Showing data from {successLabel}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </div>
@@ -171,11 +186,14 @@ function MorningBriefing() {
 
         {showDegradedNotice && s ? (
           <WarningBadge>
-            {s.latest?.status === "rate_limited"
+            {s.lastAttemptStatus === "rate_limited"
               ? `Rate-limited. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`
-              : `Could not refresh. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`}
+              : latestZeroFixtures
+                ? `Latest scan completed but found no fixtures in the window. See diagnostics below. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`
+                : `Could not refresh. Showing ${s.lastScanAt ? athensLocalTime(new Date(s.lastScanAt)) : "earlier"}.`}
           </WarningBadge>
         ) : null}
+
 
         {/* Market conditions — single line, expandable */}
         {conditions.summary ? (
