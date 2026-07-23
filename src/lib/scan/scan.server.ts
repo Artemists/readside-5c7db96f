@@ -441,6 +441,37 @@ export async function runScanNow() {
     meanDisagreement: meanDisagreement != null ? Number(meanDisagreement.toFixed(4)) : null,
   });
 
+  // -------- scan:polymarket — independent fair-probability disagreement.
+  if (pmActive) {
+    // Persist newly-fetched entries (30-min cache).
+    if (pmToStore.length) await storeCachedPolymarket(pmToStore);
+    const disags = pmStats.disagreements;
+    const meanAbsDiff = disags.length
+      ? disags.reduce((a, b) => a + b, 0) / disags.length
+      : null;
+    const sortedDiffs = [...disags].sort((a, b) => a - b);
+    const medianAbsDiff = sortedDiffs.length
+      ? sortedDiffs[Math.floor(sortedDiffs.length / 2)]
+      : null;
+    console.log("scan:polymarket", {
+      policy: polymarketPolicy,
+      attempted: pmStats.attempted,
+      matched: pmStats.matched,
+      cachedHits: pmStats.cached,
+      failures: {
+        no_market: pmStats.noMarket,
+        ambiguous_shape: pmStats.ambiguousShape,
+        stale_end_date: pmStats.staleEndDate,
+      },
+      matchedPct: pmStats.attempted
+        ? Math.round((pmStats.matched / pmStats.attempted) * 1000) / 10
+        : 0,
+      disagreementN: disags.length,
+      meanAbsDiff: meanAbsDiff != null ? Math.round(meanAbsDiff * 10000) / 10000 : null,
+      medianAbsDiff: medianAbsDiff != null ? Math.round(medianAbsDiff * 10000) / 10000 : null,
+    });
+  }
+
   // -------- scan:funnel — real distribution so thresholds can be calibrated
   // against data instead of guessed. Reads only from what we just scored.
   const pct = (arr: number[], p: number): number | null => {
