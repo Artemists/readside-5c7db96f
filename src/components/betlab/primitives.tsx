@@ -79,7 +79,9 @@ export function StatCard({
       >
         {value}
       </span>
-      <span className="caption-mono text-[11px] leading-none">{label}</span>
+      <span className="caption-mono text-[13px] leading-none text-text-secondary">
+        {label}
+      </span>
     </div>
   );
 }
