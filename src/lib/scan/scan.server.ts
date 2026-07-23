@@ -149,6 +149,26 @@ export async function runScanNow() {
       .filter((id) => !nearKickoffIds.has(id)),
   );
 
+  // -------- Polymarket pre-fetch (independent fair-probability source) -------
+  // Fetched once per scan and reused across all events. Cache stores per-match
+  // resolution for 30 minutes so repeated scans don't re-scan the full list.
+  const polymarketPolicy = SCORING.value.polymarketPolicy;
+  const pmActive = polymarketPolicy !== "off";
+  const pmCache = pmActive ? await getCachedPolymarket(events.map((e) => e.id)) : new Map<string, PolymarketProbs>();
+  const pmMarkets = pmActive && events.some((e) => !pmCache.has(e.id))
+    ? await fetchActiveSportsMarkets()
+    : [];
+  const pmStats = {
+    attempted: 0,
+    matched: 0,
+    cached: 0,
+    noMarket: 0,
+    ambiguousShape: 0,
+    staleEndDate: 0,
+    disagreements: [] as number[],
+  };
+  const pmToStore: Array<{ matchId: string; probs: PolymarketProbs }> = [];
+
   // 2) Fetch odds + score (skip fresh ones).
   const scored: ScoredMatch[] = [];
   let reused = 0;
