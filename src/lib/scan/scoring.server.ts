@@ -428,10 +428,17 @@ function buildValueResult(
   const cap = cfg.edgePctForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
   let score = clamp(50 + (clamped / cap) * 45, 0, 100);
-  // Thin-data dampening: winner priced by a single book (either against the
-  // market or via the shadow model) gets its Value pulled toward 50. Hard
-  // guards (long_shot, suspicious_edge) still apply upstream.
-  if (w.source === "single_book_market" || w.source === "model_single_book") {
+  let singleBookNote = "";
+  // Thin-data handling:
+  //  - single_book_market: edge is not measurable from one book (de-vigging
+  //    one book returns that book's own margin, so fair ≈ implied by
+  //    construction). Pin score to neutral 50 and flag it honestly.
+  //  - model_single_book: independent model probability vs one book — a
+  //    real signal, but dampen toward 50 until the model is validated.
+  if (w.source === "single_book_market") {
+    score = 50;
+    singleBookNote = " — edge not measurable from a single book";
+  } else if (w.source === "model_single_book") {
     score = 50 + (score - 50) * cfg.singleBookValuePenalty;
   }
   const sourceTag =
@@ -446,7 +453,7 @@ function buildValueResult(
     fairProb: Math.round(w.fairProb * 10000) / 10000,
     impliedProb: Math.round(w.bestImplied * 10000) / 10000,
     evPercent: Math.round(w.evPct * 100) / 100,
-    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%`,
+    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%${singleBookNote}`,
     winnerSource: w.source,
     audit: {
       booksSeen: best.booksSeen, hasDraw: best.hasDraw,
@@ -463,9 +470,9 @@ function buildValueResult(
 function trapScore(
   event: OddsEvent,
   quotes: MLQuote[],
-): { score: number; note: string } {
+): { score: number; note: string; favImplied: number | null } {
   if (quotes.length === 0) {
-    return { score: 0, note: "no odds to evaluate" };
+    return { score: 0, note: "no odds to evaluate", favImplied: null };
   }
   const favImplieds = quotes.map((q) => Math.max(1 / q.home, 1 / q.away));
   const shortestFav = Math.max(...favImplieds);
@@ -485,6 +492,7 @@ function trapScore(
   return {
     score: clamp(score, 0, 100),
     note: `fav implied ${(shortestFav * 100).toFixed(0)}%${bigName ? ", high-profile side" : ""}${spread > 0 ? `, book spread ${(spread * 20).toFixed(0)}%` : ""}`,
+    favImplied: shortestFav,
   };
 }
 
@@ -588,7 +596,7 @@ export function scoreEvent(
       context: { score: ctx.score, note: ctx.note, tier: ctx.tier },
       explosion: { score: exp.score, note: exp.note },
       value: { score: val.score, note: val.note, audit: val.audit, market: val.winnerMarket },
-      trap: { score: trap.score, note: trap.note },
+      trap: { score: trap.score, note: trap.note, favImplied: trap.favImplied },
     },
   };
 }

@@ -177,10 +177,12 @@ export async function runScanNow() {
       for (const markets of Object.values(books)) {
         for (const m of markets) {
           const n = (m.name ?? "").toLowerCase();
+          // Independent tests — a market name like "Total corners" must not
+          // suppress detection of a sibling "Totals" market on the same book.
           if (n === "ml" || n === "moneyline" || n === "h2h") seen.moneyline = true;
           if (n.includes("corner")) seen.corners = true;
-          else if (n.includes("card") || n.includes("booking")) seen.cards = true;
-          else if (n === "totals" || n === "over/under" || n === "o/u") seen.totals = true;
+          if (n.includes("card") || n.includes("booking")) seen.cards = true;
+          if (n === "totals" || n === "over/under" || n === "o/u") seen.totals = true;
         }
       }
       if (seen.moneyline) marketTally.moneyline++;
@@ -275,6 +277,85 @@ export async function runScanNow() {
     ...shadowFail,
     meanDisagreement: meanDisagreement != null ? Number(meanDisagreement.toFixed(4)) : null,
   });
+
+  // -------- scan:funnel — real distribution so thresholds can be calibrated
+  // against data instead of guessed. Reads only from what we just scored.
+  const pct = (arr: number[], p: number): number | null => {
+    if (arr.length === 0) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const idx = Math.max(0, Math.min(s.length - 1, Math.round((p / 100) * (s.length - 1))));
+    return Math.round(s[idx] * 100) / 100;
+  };
+  const verdictCounts = { opportunity: 0, trap: 0, ignore: 0 };
+  const disqCounts = { long_shot: 0, suspicious_edge: 0, no_market: 0 };
+  const dqCounts = { multi_book: 0, single_book: 0, model_single_book: 0 };
+  const edgePctsMulti: number[] = [];
+  const valueScores: number[] = [];
+  const trapScores: number[] = [];
+  const favImplieds: number[] = [];
+  let trapGateCount = 0;
+  let failedValue = 0, failedContext = 0, failedTrap = 0;
+  for (const s of scored) {
+    verdictCounts[s.verdict]++;
+    valueScores.push(s.valueScore);
+    trapScores.push(s.trapScore);
+    const sig = s.signals as {
+      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; selections?: Array<{ dataQuality?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean }> } };
+      trap?: { favImplied?: number | null };
+    };
+    const dq = sig.value?.audit?.dataQuality;
+    if (dq && dq in dqCounts) dqCounts[dq as keyof typeof dqCounts]++;
+    const disq = sig.value?.audit?.disqualifier;
+    if (disq && disq in disqCounts) disqCounts[disq as keyof typeof disqCounts]++;
+    for (const sel of sig.value?.audit?.selections ?? []) {
+      if (sel.dataQuality === "multi_book" && sel.eligible && typeof sel.edgePct === "number") {
+        edgePctsMulti.push(sel.edgePct);
+      }
+    }
+    const fav = sig.trap?.favImplied;
+    if (typeof fav === "number") favImplieds.push(fav);
+    // Independent opportunity-gate failure counts (>=1 gate binding per event).
+    if (s.trapScore >= 60) trapGateCount++;
+    if (s.valueScore < 70) failedValue++;
+    if (s.contextScore < 4) failedContext++;
+    if (s.trapScore >= 60) failedTrap++;
+  }
+  console.log("scan:funnel", {
+    scored: scored.length,
+    verdicts: verdictCounts,
+    disqualifiers: disqCounts,
+    dataQuality: dqCounts,
+    edgePctMultiBook: {
+      n: edgePctsMulti.length,
+      min: pct(edgePctsMulti, 0),
+      p25: pct(edgePctsMulti, 25),
+      median: pct(edgePctsMulti, 50),
+      p75: pct(edgePctsMulti, 75),
+      max: pct(edgePctsMulti, 100),
+    },
+    valueScore: {
+      min: pct(valueScores, 0),
+      median: pct(valueScores, 50),
+      max: pct(valueScores, 100),
+    },
+    trapScore: {
+      min: pct(trapScores, 0),
+      median: pct(trapScores, 50),
+      max: pct(trapScores, 100),
+    },
+    oppGateFailures: {
+      value_lt_70: failedValue,
+      context_lt_4: failedContext,
+      trap_gte_60: failedTrap,
+    },
+  });
+  console.log("scan:trap", {
+    trapGate: trapGateCount,
+    medianFavImplied: pct(favImplieds, 50),
+    n: favImplieds.length,
+  });
+
+
 
   // 3) Determine scan status.
   let status: ScanStatus;
