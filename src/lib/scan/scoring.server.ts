@@ -88,18 +88,24 @@ function extractOverUnderBy(
   return out;
 }
 
-function extractTotals(event: OddsEvent): TotalsQuote[] {
-  return extractOverUnderBy(event, (n) =>
-    n === "totals" || n === "over/under" || n === "o/u",
+function extractTotals(event: OddsEvent, debug = false): TotalsQuote[] {
+  return extractOverUnderBy(
+    event,
+    (n) => n === "totals" || n === "over/under" || n === "o/u",
+    debug ? "totals" : undefined,
   );
 }
 
-export function extractCorners(event: OddsEvent): TotalsQuote[] {
-  return extractOverUnderBy(event, (n) => n.includes("corner"));
+export function extractCorners(event: OddsEvent, debug = false): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) => n.includes("corner"), debug ? "corners" : undefined);
 }
 
-export function extractCards(event: OddsEvent): TotalsQuote[] {
-  return extractOverUnderBy(event, (n) => n.includes("card") || n.includes("booking"));
+export function extractCards(event: OddsEvent, debug = false): TotalsQuote[] {
+  return extractOverUnderBy(
+    event,
+    (n) => n.includes("card") || n.includes("booking"),
+    debug ? "cards" : undefined,
+  );
 }
 
 
