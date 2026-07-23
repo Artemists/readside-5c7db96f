@@ -151,6 +151,27 @@ export type Database = {
           },
         ]
       }
+      polymarket_cache: {
+        Row: {
+          condition_id: string | null
+          fetched_at: string
+          match_id: string
+          payload: Json
+        }
+        Insert: {
+          condition_id?: string | null
+          fetched_at?: string
+          match_id: string
+          payload: Json
+        }
+        Update: {
+          condition_id?: string | null
+          fetched_at?: string
+          match_id?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       scans: {
         Row: {
           api_calls: number

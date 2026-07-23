@@ -1,4 +1,4 @@
-import { SCAN } from "./config";
+import { SCAN, SCORING } from "./config";
 import { athensLocalDate } from "@/lib/time";
 import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
 import { scoreEvent, competitionTier } from "./scoring.server";
@@ -9,6 +9,14 @@ import {
   poissonMatchProbabilities,
   type MatchProbabilities,
 } from "@/lib/model/rates";
+import {
+  fetchActiveSportsMarkets,
+  matchToPolymarket,
+  polymarketProbabilities,
+  getCachedPolymarket,
+  storeCachedPolymarket,
+  type PolymarketProbs,
+} from "@/lib/polymarket/gamma.server";
 
 
 type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
@@ -141,6 +149,26 @@ export async function runScanNow() {
       .filter((id) => !nearKickoffIds.has(id)),
   );
 
+  // -------- Polymarket pre-fetch (independent fair-probability source) -------
+  // Fetched once per scan and reused across all events. Cache stores per-match
+  // resolution for 30 minutes so repeated scans don't re-scan the full list.
+  const polymarketPolicy = SCORING.value.polymarketPolicy;
+  const pmActive = polymarketPolicy !== "off";
+  const pmCache = pmActive ? await getCachedPolymarket(events.map((e) => e.id)) : new Map<string, PolymarketProbs>();
+  const pmMarkets = pmActive && events.some((e) => !pmCache.has(e.id))
+    ? await fetchActiveSportsMarkets()
+    : [];
+  const pmStats = {
+    attempted: 0,
+    matched: 0,
+    cached: 0,
+    noMarket: 0,
+    ambiguousShape: 0,
+    staleEndDate: 0,
+    disagreements: [] as number[],
+  };
+  const pmToStore: Array<{ matchId: string; probs: PolymarketProbs }> = [];
+
   // 2) Fetch odds + score (skip fresh ones).
   const scored: ScoredMatch[] = [];
   let reused = 0;
@@ -261,6 +289,90 @@ export async function runScanNow() {
         }
       }
 
+      // -------- Polymarket resolution + shadow edge --------
+      if (pmActive) {
+        pmStats.attempted++;
+        let pmProbs: PolymarketProbs | null = pmCache.get(e.id) ?? null;
+        if (pmProbs) {
+          pmStats.cached++;
+        } else if (pmMarkets.length > 0) {
+          const found = matchToPolymarket(merged.home, merged.away, merged.date ?? null, pmMarkets);
+          if (!found) {
+            pmStats.noMarket++;
+          } else {
+            const kickoffMs = merged.date ? Date.parse(merged.date) : NaN;
+            const endMs = found.endDate ? Date.parse(found.endDate) : NaN;
+            if (Number.isFinite(kickoffMs) && Number.isFinite(endMs) && Math.abs(endMs - kickoffMs) > 48 * 3600 * 1000) {
+              pmStats.staleEndDate++;
+            } else {
+              const probs = polymarketProbabilities(found, merged.home, merged.away);
+              if (!probs) {
+                pmStats.ambiguousShape++;
+              } else {
+                pmProbs = probs;
+                pmToStore.push({ matchId: e.id, probs });
+              }
+            }
+          }
+        } else {
+          pmStats.noMarket++;
+        }
+
+        if (pmProbs) {
+          pmStats.matched++;
+          // Per-selection shadow edge: compare Polymarket prob against best
+          // book price on the same side (moneyline only — we only have h/d/a).
+          const vAudit = (scoredMatch.signals as { value?: { audit?: { selections?: Array<{ selection: string; bestOdds: number; bestBook: string; bestImplied: number; fairProb: number }> } } }).value?.audit;
+          const sels = vAudit?.selections ?? [];
+          const bySel = new Map<string, { bestOdds: number; bestBook: string; bestImplied: number; marketFair: number }>();
+          for (const s of sels) {
+            bySel.set(s.selection.toLowerCase(), {
+              bestOdds: s.bestOdds,
+              bestBook: s.bestBook,
+              bestImplied: s.bestImplied,
+              marketFair: s.fairProb,
+            });
+          }
+          const shadowEdges: Record<string, { pmProb: number; bestOdds: number | null; bestBook: string | null; bestImplied: number | null; marketFair: number | null; pmEdgePct: number | null; pmMinusMarketFair: number | null }> = {};
+          const disagreementsHere: number[] = [];
+          for (const side of ["home", "draw", "away"] as const) {
+            const p = side === "draw" ? pmProbs.draw : pmProbs[side];
+            if (p == null) continue;
+            const book = bySel.get(side);
+            const pmEdgePct = book ? ((p - book.bestImplied) / book.bestImplied) * 100 : null;
+            const diff = book ? p - book.marketFair : null;
+            if (diff != null) disagreementsHere.push(Math.abs(diff));
+            shadowEdges[side] = {
+              pmProb: Math.round(p * 10000) / 10000,
+              bestOdds: book?.bestOdds ?? null,
+              bestBook: book?.bestBook ?? null,
+              bestImplied: book ? Math.round(book.bestImplied * 10000) / 10000 : null,
+              marketFair: book ? Math.round(book.marketFair * 10000) / 10000 : null,
+              pmEdgePct: pmEdgePct != null ? Math.round(pmEdgePct * 100) / 100 : null,
+              pmMinusMarketFair: diff != null ? Math.round(diff * 10000) / 10000 : null,
+            };
+          }
+          for (const d of disagreementsHere) pmStats.disagreements.push(d);
+
+          (scoredMatch.signals as Record<string, unknown>).polymarket = {
+            matched: true,
+            question: pmProbs.question,
+            conditionId: pmProbs.conditionId,
+            shape: pmProbs.shape,
+            endDate: pmProbs.endDate,
+            probs: {
+              home: Math.round(pmProbs.home * 10000) / 10000,
+              draw: pmProbs.draw != null ? Math.round(pmProbs.draw * 10000) / 10000 : null,
+              away: Math.round(pmProbs.away * 10000) / 10000,
+            },
+            shadowEdges,
+            policy: polymarketPolicy,
+          };
+        } else {
+          (scoredMatch.signals as Record<string, unknown>).polymarket = { matched: false, policy: polymarketPolicy };
+        }
+      }
+
       scored.push(scoredMatch);
       stage.scored++;
 
@@ -328,6 +440,37 @@ export async function runScanNow() {
     ...shadowFail,
     meanDisagreement: meanDisagreement != null ? Number(meanDisagreement.toFixed(4)) : null,
   });
+
+  // -------- scan:polymarket — independent fair-probability disagreement.
+  if (pmActive) {
+    // Persist newly-fetched entries (30-min cache).
+    if (pmToStore.length) await storeCachedPolymarket(pmToStore);
+    const disags = pmStats.disagreements;
+    const meanAbsDiff = disags.length
+      ? disags.reduce((a, b) => a + b, 0) / disags.length
+      : null;
+    const sortedDiffs = [...disags].sort((a, b) => a - b);
+    const medianAbsDiff = sortedDiffs.length
+      ? sortedDiffs[Math.floor(sortedDiffs.length / 2)]
+      : null;
+    console.log("scan:polymarket", {
+      policy: polymarketPolicy,
+      attempted: pmStats.attempted,
+      matched: pmStats.matched,
+      cachedHits: pmStats.cached,
+      failures: {
+        no_market: pmStats.noMarket,
+        ambiguous_shape: pmStats.ambiguousShape,
+        stale_end_date: pmStats.staleEndDate,
+      },
+      matchedPct: pmStats.attempted
+        ? Math.round((pmStats.matched / pmStats.attempted) * 1000) / 10
+        : 0,
+      disagreementN: disags.length,
+      meanAbsDiff: meanAbsDiff != null ? Math.round(meanAbsDiff * 10000) / 10000 : null,
+      medianAbsDiff: medianAbsDiff != null ? Math.round(medianAbsDiff * 10000) / 10000 : null,
+    });
+  }
 
   // -------- scan:funnel — real distribution so thresholds can be calibrated
   // against data instead of guessed. Reads only from what we just scored.
