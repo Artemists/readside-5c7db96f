@@ -183,42 +183,54 @@ export async function runScanNow() {
         away: odds.away ?? e.away,
         date: odds.date ?? e.date,
       };
-      const scoredMatch = scoreEvent(merged, { debugLines: diagLogged <= 3 });
 
-      // Shadow-mode independent model — never influences verdict/stake/recs.
+      // Compute independent model probabilities BEFORE scoring so scoreEvent
+      // can consult them (dormant unless singleBookPolicy === "model"). Shadow
+      // logging below still runs exactly as before.
+      let modelProbs: MatchProbabilities | null = null;
+      let modelSample = 0;
+      let modelReason: ModelFailure | null = null;
       const { inputs, reason } = await getModelInputs(merged.home, merged.away);
       if (!inputs) {
-        scoredMatch.signals.model = null;
-        if (reason) shadowFail[reason]++;
+        modelReason = reason ?? null;
       } else {
         const homeRates = attackDefenceRates(inputs.homeForm);
         const awayRates = attackDefenceRates(inputs.awayForm);
         if (!homeRates || !awayRates) {
-          scoredMatch.signals.model = null;
-          shadowFail.insufficient_form++;
+          modelReason = "insufficient_form";
         } else {
-          const probs = poissonMatchProbabilities(
+          modelProbs = poissonMatchProbabilities(
             homeRates.attack,
             homeRates.defence,
             awayRates.attack,
             awayRates.defence,
           );
-          const disagreement = computeDisagreement(scoredMatch, probs);
-          scoredMatch.signals.model = {
-            homeWin: probs.homeWin,
-            draw: probs.draw,
-            awayWin: probs.awayWin,
-            expectedHomeGoals: probs.expectedHomeGoals,
-            expectedAwayGoals: probs.expectedAwayGoals,
-            over: probs.over,
-            under: probs.under,
-            sampleSize: inputs.sampleSize,
-            disagreement,
-          };
-          shadowOk++;
-          if (disagreement != null) {
-            shadowDisagreements.push(disagreement);
-          }
+          modelSample = inputs.sampleSize;
+        }
+      }
+
+      const scoredMatch = scoreEvent(merged, { debugLines: diagLogged <= 3 }, modelProbs);
+
+      // Shadow-mode independent model — never influences verdict/stake/recs.
+      if (!modelProbs) {
+        scoredMatch.signals.model = null;
+        if (modelReason) shadowFail[modelReason]++;
+      } else {
+        const disagreement = computeDisagreement(scoredMatch, modelProbs);
+        scoredMatch.signals.model = {
+          homeWin: modelProbs.homeWin,
+          draw: modelProbs.draw,
+          awayWin: modelProbs.awayWin,
+          expectedHomeGoals: modelProbs.expectedHomeGoals,
+          expectedAwayGoals: modelProbs.expectedAwayGoals,
+          over: modelProbs.over,
+          under: modelProbs.under,
+          sampleSize: modelSample,
+          disagreement,
+        };
+        shadowOk++;
+        if (disagreement != null) {
+          shadowDisagreements.push(disagreement);
         }
       }
 

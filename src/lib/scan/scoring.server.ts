@@ -1,4 +1,5 @@
 import { SCORING, STAKE, VERDICT } from "./config";
+import type { MatchProbabilities } from "@/lib/model/rates";
 import type { OddsEvent, ScoredMatch, Verdict } from "./types";
 
 function num(v: string | number | undefined | null): number | null {
@@ -189,6 +190,7 @@ type SelectionAudit = {
   evPct: number;
   eligible: boolean;
   disqualifier: string | null;
+  source: "market" | "model_single_book";
 };
 
 type ValueResult = {
@@ -200,11 +202,13 @@ type ValueResult = {
   impliedProb: number | null;
   evPercent: number | null;
   note: string;
+  winnerSource: SelectionAudit["source"] | null;
   audit: {
     booksSeen: string[];
     hasDraw: boolean;
     selections: SelectionAudit[];
     winner: string | null;
+    winnerSource: SelectionAudit["source"] | null;
     disqualifier: string | null;
   };
 };
@@ -225,13 +229,14 @@ function evaluateSelections(
   selections: readonly string[],
   perBookOdds: number[][],
   books: string[],
+  modelFair: Array<number | null> | null,
 ): { audits: SelectionAudit[]; eligibleWinner: SelectionAudit | null; fallbackByEv: SelectionAudit | null } {
   const cfg = SCORING.value;
   if (perBookOdds.length === 0) {
     return { audits: [], eligibleWinner: null, fallbackByEv: null };
   }
   const perBookFair = perBookOdds.map((row) => devig(row));
-  const fair = selections.map((_, i) => {
+  const marketFair = selections.map((_, i) => {
     const vals = perBookFair.map((row) => row[i]);
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   });
@@ -242,16 +247,28 @@ function evaluateSelections(
       implied: 1 / row[i],
     }));
     const best = priced.reduce((a, b) => (a.odds > b.odds ? a : b));
-    const edgePct = ((fair[i] - best.implied) / best.implied) * 100;
-    const evPct = (fair[i] * (best.odds - 1) - (1 - fair[i])) * 100;
+    let source: SelectionAudit["source"] = "market";
+    let selFair = marketFair[i];
     let disqualifier: string | null = null;
-    if (priced.length < cfg.minBooksForValue) disqualifier = "single_book";
-    else if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
-    else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    if (priced.length < cfg.minBooksForValue) {
+      const modelP = modelFair?.[i] ?? null;
+      if (cfg.singleBookPolicy === "model" && modelP != null && modelP > 0 && modelP < 1) {
+        source = "model_single_book";
+        selFair = modelP;
+      } else {
+        disqualifier = "single_book";
+      }
+    }
+    const edgePct = ((selFair - best.implied) / best.implied) * 100;
+    const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
+    if (disqualifier === null) {
+      if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
+      else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    }
     return {
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
-      fairProb: fair[i],
+      fairProb: selFair,
       bestOdds: best.odds,
       bestBook: best.book,
       bestImplied: best.implied,
@@ -259,6 +276,7 @@ function evaluateSelections(
       evPct,
       eligible: disqualifier === null,
       disqualifier,
+      source,
     };
   });
   const eligible = audits.filter((a) => a.eligible);
@@ -267,14 +285,20 @@ function evaluateSelections(
   return { audits, eligibleWinner, fallbackByEv };
 }
 
-function evaluateMoneyline(quotes: MLQuote[]): EvaluatedMarket {
+function evaluateMoneyline(quotes: MLQuote[], modelProbs: MatchProbabilities | null): EvaluatedMarket {
   const hasDraw = quotes.length > 0 && quotes.every((q) => q.draw != null);
   const selections = hasDraw ? (["home", "draw", "away"] as const) : (["home", "away"] as const);
   const perBookOdds = quotes.map((q) => (hasDraw ? [q.home, q.draw!, q.away] : [q.home, q.away]));
+  const modelFair: Array<number | null> | null = modelProbs
+    ? hasDraw
+      ? [modelProbs.homeWin, modelProbs.draw, modelProbs.awayWin]
+      : [modelProbs.homeWin, modelProbs.awayWin]
+    : null;
   const { audits, eligibleWinner, fallbackByEv } = evaluateSelections(
     selections,
     perBookOdds,
     quotes.map((q) => q.book),
+    modelFair,
   );
   return {
     market: "Moneyline",
@@ -290,6 +314,7 @@ function evaluateOverUnder(
   quotes: TotalsQuote[],
   market: MarketName,
   unitLabel: string,
+  modelOU: { over: Record<string, number>; under: Record<string, number> } | null,
 ): EvaluatedMarket | null {
   if (quotes.length === 0) return null;
   const byLine = new Map<number, TotalsQuote[]>();
@@ -300,7 +325,16 @@ function evaluateOverUnder(
   }
   const [line, group] = [...byLine.entries()].sort((a, b) => b[1].length - a[1].length)[0];
   const perBookOdds = group.map((t) => [t.over, t.under]);
-  const rawAudits = evaluateSelections(["over", "under"] as const, perBookOdds, group.map((t) => t.book));
+  const key = String(line);
+  const modelFair: Array<number | null> | null = modelOU
+    ? [modelOU.over[key] ?? null, modelOU.under[key] ?? null]
+    : null;
+  const rawAudits = evaluateSelections(
+    ["over", "under"] as const,
+    perBookOdds,
+    group.map((t) => t.book),
+    modelFair,
+  );
   const audits = rawAudits.audits.map((a) => ({
     ...a,
     selection: (a.selection === "over"
@@ -321,16 +355,19 @@ function evaluateOverUnder(
   };
 }
 
-function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
-  return evaluateOverUnder(totals, "Total goals", "goals");
+function evaluateTotals(totals: TotalsQuote[], modelProbs: MatchProbabilities | null): EvaluatedMarket | null {
+  const modelOU = modelProbs ? { over: modelProbs.over, under: modelProbs.under } : null;
+  return evaluateOverUnder(totals, "Total goals", "goals", modelOU);
 }
 
 function evaluateCorners(quotes: TotalsQuote[]): EvaluatedMarket | null {
-  return evaluateOverUnder(quotes, "Total corners", "corners");
+  // Model has no coverage for corners — always market-only.
+  return evaluateOverUnder(quotes, "Total corners", "corners", null);
 }
 
 function evaluateCards(quotes: TotalsQuote[]): EvaluatedMarket | null {
-  return evaluateOverUnder(quotes, "Total cards", "cards");
+  // Model has no coverage for cards — always market-only.
+  return evaluateOverUnder(quotes, "Total cards", "cards", null);
 }
 
 function buildValueResult(
@@ -343,7 +380,8 @@ function buildValueResult(
       score: 50, edgePercent: null, bestOdds: null, bestSelection: null,
       fairProb: null, impliedProb: null, evPercent: null,
       note: "no priced markets available",
-      audit: { booksSeen: [], hasDraw: false, selections: [], winner: null, disqualifier: "no_market" },
+      winnerSource: null,
+      audit: { booksSeen: [], hasDraw: false, selections: [], winner: null, winnerSource: null, disqualifier: "no_market" },
       winnerMarket: null,
     };
   }
@@ -364,9 +402,10 @@ function buildValueResult(
       impliedProb: Math.round(w.bestImplied * 10000) / 10000,
       evPercent: Math.round(w.evPct * 100) / 100,
       note: `neutral — ${w.disqualifier ?? "no eligible selection"}`,
+      winnerSource: null,
       audit: {
         booksSeen: best.booksSeen, hasDraw: best.hasDraw,
-        selections: best.selections, winner: null, disqualifier: w.disqualifier,
+        selections: best.selections, winner: null, winnerSource: null, disqualifier: w.disqualifier,
       },
       winnerMarket: best.market,
     };
@@ -379,6 +418,7 @@ function buildValueResult(
   const cap = cfg.edgePctForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
   const score = clamp(50 + (clamped / cap) * 45, 0, 100);
+  const sourceTag = w.source === "model_single_book" ? " [model/single-book]" : "";
   return {
     score: Math.round(score * 10) / 10,
     edgePercent: Math.round(w.edgePct * 100) / 100,
@@ -387,14 +427,16 @@ function buildValueResult(
     fairProb: Math.round(w.fairProb * 10000) / 10000,
     impliedProb: Math.round(w.bestImplied * 10000) / 10000,
     evPercent: Math.round(w.evPct * 100) / 100,
-    note: `[${best.market}] best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%`,
+    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%`,
+    winnerSource: w.source,
     audit: {
       booksSeen: best.booksSeen, hasDraw: best.hasDraw,
-      selections: best.selections, winner: w.selection, disqualifier: null,
+      selections: best.selections, winner: w.selection, winnerSource: w.source, disqualifier: null,
     },
     winnerMarket: best.market,
   };
 }
+
 
 
 // -------------------- Trap (0..100) --------------------
@@ -457,15 +499,19 @@ function buildReasoning(
   return `${prefix}${edge} Context: ${parts.ctx}. Explosion: ${parts.exp}. Value: ${parts.val}. Trap: ${parts.trap}.`;
 }
 
-export function scoreEvent(event: OddsEvent, opts: { debugLines?: boolean } = {}): ScoredMatch {
+export function scoreEvent(
+  event: OddsEvent,
+  opts: { debugLines?: boolean } = {},
+  modelProbs: MatchProbabilities | null = null,
+): ScoredMatch {
   const debug = !!opts.debugLines;
   const quotes = extractMoneylines(event);
   const totalsQuotes = extractTotals(event, debug);
   const cornersQuotes = extractCorners(event, debug);
   const cardsQuotes = extractCards(event, debug);
   const ctx = contextScore(event);
-  const mlMarket = evaluateMoneyline(quotes);
-  const totalsMarket = evaluateTotals(totalsQuotes);
+  const mlMarket = evaluateMoneyline(quotes, modelProbs);
+  const totalsMarket = evaluateTotals(totalsQuotes, modelProbs);
   const cornersMarket = evaluateCorners(cornersQuotes);
   const cardsMarket = evaluateCards(cardsQuotes);
   const val = buildValueResult(
@@ -478,7 +524,11 @@ export function scoreEvent(event: OddsEvent, opts: { debugLines?: boolean } = {}
 
   const verdict = decideVerdict(ctx.score, val.score, trap.score);
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
-  const confidence = Math.round(clamp(confidenceRaw, 1, 10) * 10) / 10;
+  const singleBookPenalty =
+    val.winnerSource === "model_single_book"
+      ? SCORING.value.singleBookModelConfidenceFactor
+      : 1;
+  const confidence = Math.round(clamp(confidenceRaw * singleBookPenalty, 1, 10) * 10) / 10;
 
   const stake =
     verdict === "opportunity" && confidence >= STAKE.smallConfidenceMin

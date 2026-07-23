@@ -51,6 +51,17 @@ export const SCORING = {
     maxAllowedOdds: 6.0,
     // Minimum bookmakers that must quote the selection for a real value read.
     minBooksForValue: 2,
+    // "block" = disqualify single-book selections (safe until the shadow model
+    // is validated). "model" = allow single-book selections to be valued
+    // against the independent model's fair probability instead of market
+    // de-vig. Do NOT set this to "model" until the shadow model has passed
+    // calibration on a few hundred matches.
+    singleBookPolicy: "block" as "block" | "model",
+    // Confidence multiplier applied when the winning selection was priced via
+    // the independent model against a single book (source = "model_single_book").
+    // Keeps single-book model bets from ever showing the same confidence as
+    // multi-book market agreement.
+    singleBookModelConfidenceFactor: 0.7,
   },
 
   // ------- Trap (0..100) -------
