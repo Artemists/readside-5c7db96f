@@ -1,4 +1,5 @@
 import { SCORING, STAKE, VERDICT } from "./config";
+import type { MatchProbabilities } from "@/lib/model/rates";
 import type { OddsEvent, ScoredMatch, Verdict } from "./types";
 
 function num(v: string | number | undefined | null): number | null {
