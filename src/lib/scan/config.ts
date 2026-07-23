@@ -76,6 +76,13 @@ export const SCORING = {
     // Value of 78 becomes 50 + (78-50)*0.5 = 64. Single-book edges are
     // structurally noisier, so we surface the read but damp its magnitude.
     singleBookValuePenalty: 0.5,
+    // Independent prediction-market fair source (Polymarket Gamma API).
+    //   "off"      — do not fetch.
+    //   "shadow"   — fetch, record shadow edge in signals.polymarket, no
+    //                effect on verdict / value score / stake / display.
+    //   "primary"  — use Polymarket probability as fairProb (not enabled yet;
+    //                shadow phase must show real disagreement first).
+    polymarketPolicy: "shadow" as "off" | "shadow" | "primary",
   },
 
   // ------- Trap (0..100) -------
