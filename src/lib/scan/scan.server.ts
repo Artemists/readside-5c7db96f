@@ -627,6 +627,8 @@ export async function runScanNow() {
     },
     teamLookup: {
       negativeCacheHits: lookupStats.negativeCacheHits,
+      apiErrors: lookupStats.apiErrors,
+      rateLimited: lookupStats.rateLimited,
     },
   });
   for (const d of lookupStats.debug) {
