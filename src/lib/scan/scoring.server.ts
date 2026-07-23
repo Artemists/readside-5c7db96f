@@ -285,14 +285,20 @@ function evaluateSelections(
   return { audits, eligibleWinner, fallbackByEv };
 }
 
-function evaluateMoneyline(quotes: MLQuote[]): EvaluatedMarket {
+function evaluateMoneyline(quotes: MLQuote[], modelProbs: MatchProbabilities | null): EvaluatedMarket {
   const hasDraw = quotes.length > 0 && quotes.every((q) => q.draw != null);
   const selections = hasDraw ? (["home", "draw", "away"] as const) : (["home", "away"] as const);
   const perBookOdds = quotes.map((q) => (hasDraw ? [q.home, q.draw!, q.away] : [q.home, q.away]));
+  const modelFair: Array<number | null> | null = modelProbs
+    ? hasDraw
+      ? [modelProbs.homeWin, modelProbs.draw, modelProbs.awayWin]
+      : [modelProbs.homeWin, modelProbs.awayWin]
+    : null;
   const { audits, eligibleWinner, fallbackByEv } = evaluateSelections(
     selections,
     perBookOdds,
     quotes.map((q) => q.book),
+    modelFair,
   );
   return {
     market: "Moneyline",
@@ -308,6 +314,7 @@ function evaluateOverUnder(
   quotes: TotalsQuote[],
   market: MarketName,
   unitLabel: string,
+  modelOU: { over: Record<string, number>; under: Record<string, number> } | null,
 ): EvaluatedMarket | null {
   if (quotes.length === 0) return null;
   const byLine = new Map<number, TotalsQuote[]>();
@@ -318,7 +325,16 @@ function evaluateOverUnder(
   }
   const [line, group] = [...byLine.entries()].sort((a, b) => b[1].length - a[1].length)[0];
   const perBookOdds = group.map((t) => [t.over, t.under]);
-  const rawAudits = evaluateSelections(["over", "under"] as const, perBookOdds, group.map((t) => t.book));
+  const key = String(line);
+  const modelFair: Array<number | null> | null = modelOU
+    ? [modelOU.over[key] ?? null, modelOU.under[key] ?? null]
+    : null;
+  const rawAudits = evaluateSelections(
+    ["over", "under"] as const,
+    perBookOdds,
+    group.map((t) => t.book),
+    modelFair,
+  );
   const audits = rawAudits.audits.map((a) => ({
     ...a,
     selection: (a.selection === "over"
@@ -339,16 +355,19 @@ function evaluateOverUnder(
   };
 }
 
-function evaluateTotals(totals: TotalsQuote[]): EvaluatedMarket | null {
-  return evaluateOverUnder(totals, "Total goals", "goals");
+function evaluateTotals(totals: TotalsQuote[], modelProbs: MatchProbabilities | null): EvaluatedMarket | null {
+  const modelOU = modelProbs ? { over: modelProbs.over, under: modelProbs.under } : null;
+  return evaluateOverUnder(totals, "Total goals", "goals", modelOU);
 }
 
 function evaluateCorners(quotes: TotalsQuote[]): EvaluatedMarket | null {
-  return evaluateOverUnder(quotes, "Total corners", "corners");
+  // Model has no coverage for corners — always market-only.
+  return evaluateOverUnder(quotes, "Total corners", "corners", null);
 }
 
 function evaluateCards(quotes: TotalsQuote[]): EvaluatedMarket | null {
-  return evaluateOverUnder(quotes, "Total cards", "cards");
+  // Model has no coverage for cards — always market-only.
+  return evaluateOverUnder(quotes, "Total cards", "cards", null);
 }
 
 function buildValueResult(
