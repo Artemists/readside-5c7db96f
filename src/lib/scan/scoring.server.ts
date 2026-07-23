@@ -499,15 +499,19 @@ function buildReasoning(
   return `${prefix}${edge} Context: ${parts.ctx}. Explosion: ${parts.exp}. Value: ${parts.val}. Trap: ${parts.trap}.`;
 }
 
-export function scoreEvent(event: OddsEvent, opts: { debugLines?: boolean } = {}): ScoredMatch {
+export function scoreEvent(
+  event: OddsEvent,
+  opts: { debugLines?: boolean } = {},
+  modelProbs: MatchProbabilities | null = null,
+): ScoredMatch {
   const debug = !!opts.debugLines;
   const quotes = extractMoneylines(event);
   const totalsQuotes = extractTotals(event, debug);
   const cornersQuotes = extractCorners(event, debug);
   const cardsQuotes = extractCards(event, debug);
   const ctx = contextScore(event);
-  const mlMarket = evaluateMoneyline(quotes);
-  const totalsMarket = evaluateTotals(totalsQuotes);
+  const mlMarket = evaluateMoneyline(quotes, modelProbs);
+  const totalsMarket = evaluateTotals(totalsQuotes, modelProbs);
   const cornersMarket = evaluateCorners(cornersQuotes);
   const cardsMarket = evaluateCards(cardsQuotes);
   const val = buildValueResult(
@@ -520,7 +524,11 @@ export function scoreEvent(event: OddsEvent, opts: { debugLines?: boolean } = {}
 
   const verdict = decideVerdict(ctx.score, val.score, trap.score);
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
-  const confidence = Math.round(clamp(confidenceRaw, 1, 10) * 10) / 10;
+  const singleBookPenalty =
+    val.winnerSource === "model_single_book"
+      ? SCORING.value.singleBookModelConfidenceFactor
+      : 1;
+  const confidence = Math.round(clamp(confidenceRaw * singleBookPenalty, 1, 10) * 10) / 10;
 
   const stake =
     verdict === "opportunity" && confidence >= STAKE.smallConfidenceMin
