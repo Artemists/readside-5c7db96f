@@ -596,7 +596,7 @@ export function scoreEvent(
       context: { score: ctx.score, note: ctx.note, tier: ctx.tier },
       explosion: { score: exp.score, note: exp.note },
       value: { score: val.score, note: val.note, audit: val.audit, market: val.winnerMarket },
-      trap: { score: trap.score, note: trap.note },
+      trap: { score: trap.score, note: trap.note, favImplied: trap.favImplied },
     },
   };
 }
