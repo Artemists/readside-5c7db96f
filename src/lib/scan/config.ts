@@ -58,10 +58,16 @@ export const SCORING = {
     // calibration on a few hundred matches.
     singleBookPolicy: "block" as "block" | "model",
     // Confidence multiplier applied when the winning selection was priced via
-    // the independent model against a single book (source = "model_single_book").
-    // Keeps single-book model bets from ever showing the same confidence as
-    // multi-book market agreement.
+    // the independent model against a single book (source = "model_single_book"),
+    // or when a single-book selection was valued against the market
+    // (source = "single_book_market"). Keeps thin reads from ever showing the
+    // same confidence as multi-book market agreement.
     singleBookModelConfidenceFactor: 0.7,
+    // How far the Value score is allowed to move from neutral (50) when the
+    // winning selection is priced by a single bookmaker. 0.5 means a raw
+    // Value of 78 becomes 50 + (78-50)*0.5 = 64. Single-book edges are
+    // structurally noisier, so we surface the read but damp its magnitude.
+    singleBookValuePenalty: 0.5,
   },
 
   // ------- Trap (0..100) -------
