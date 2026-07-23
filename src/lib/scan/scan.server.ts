@@ -177,10 +177,12 @@ export async function runScanNow() {
       for (const markets of Object.values(books)) {
         for (const m of markets) {
           const n = (m.name ?? "").toLowerCase();
+          // Independent tests — a market name like "Total corners" must not
+          // suppress detection of a sibling "Totals" market on the same book.
           if (n === "ml" || n === "moneyline" || n === "h2h") seen.moneyline = true;
           if (n.includes("corner")) seen.corners = true;
-          else if (n.includes("card") || n.includes("booking")) seen.cards = true;
-          else if (n === "totals" || n === "over/under" || n === "o/u") seen.totals = true;
+          if (n.includes("card") || n.includes("booking")) seen.cards = true;
+          if (n === "totals" || n === "over/under" || n === "o/u") seen.totals = true;
         }
       }
       if (seen.moneyline) marketTally.moneyline++;
