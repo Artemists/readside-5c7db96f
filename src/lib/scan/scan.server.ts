@@ -183,7 +183,7 @@ export async function runScanNow() {
         away: odds.away ?? e.away,
         date: odds.date ?? e.date,
       };
-      const scoredMatch = scoreEvent(merged);
+      const scoredMatch = scoreEvent(merged, { debugLines: diagLogged <= 3 });
 
       // Shadow-mode independent model — never influences verdict/stake/recs.
       const { inputs, reason } = await getModelInputs(merged.home, merged.away);
