@@ -103,7 +103,7 @@ function VerdictChip({ verdict, muted }: { verdict: string; muted: boolean }) {
         : "bg-card text-text-muted";
   return (
     <span
-      className={`caption-mono shrink-0 rounded px-2 py-0.5 text-[11px] uppercase ${cls}`}
+      className={`caption-mono shrink-0 rounded px-2 py-0.5 text-[13px] uppercase ${cls}`}
     >
       {label}
     </span>
@@ -173,7 +173,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
             {m.home} · {m.away}
           </p>
           {m.competition || m.sport ? (
-            <p className="caption-mono mt-1 text-[11px] uppercase text-text-muted">
+            <p className="caption-mono mt-1 text-[13px] uppercase text-text-muted">
               {m.competition ?? m.sport}
             </p>
           ) : null}
@@ -200,18 +200,18 @@ export function MatchCard({ m }: { m: MatchCardData }) {
       )}
 
       {/* Stake line */}
-      <p className="caption-mono mt-3 text-[13px] text-text-muted">
+      <p className="caption-mono mt-3 text-[13px] text-text-secondary">
         {isIgnore
           ? "Pass · not advised"
           : `${m.stake ?? "Pass"} · ${confidenceLabel(confidence)}${isPass ? " read" : " confidence"}`}
       </p>
       {dataQualityOf(m) === "single_book" || dataQualityOf(m) === "model_single_book" ? (
-        <p className="caption-mono mt-1 text-[12px] text-text-disabled">
+        <p className="caption-mono mt-1 text-[13px] text-text-muted">
           Thin data · one bookmaker
         </p>
       ) : null}
       {m.provisional ? (
-        <p className="caption-mono mt-1 text-[12px] text-text-disabled">
+        <p className="caption-mono mt-1 text-[13px] text-text-muted">
           Provisional · price may move
         </p>
       ) : null}
@@ -223,7 +223,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
       <button
         type="button"
         onClick={handleToggle}
-        className="caption-mono mt-5 self-start text-[11px] uppercase text-accent"
+        className="caption-mono mt-5 self-start text-[13px] uppercase text-accent"
       >
         {open ? "− Why" : "+ Why?"}
       </button>
@@ -231,7 +231,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
       {open ? (
         <div className="mt-3 flex flex-col gap-2.5">
           {isIgnore && (decision !== "Awaiting selection") ? (
-            <p className="caption-mono text-[12px] text-text-muted">
+            <p className="caption-mono text-[13px] text-text-muted">
               Best available: {decision}
               {odds != null ? ` @ ${odds.toFixed(2)}` : ""} — not advised.
             </p>
@@ -240,7 +240,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
           <ScoreBar label="Context" value={n(m.context_score)} max={10} />
           <ScoreBar label="Explosion" value={n(m.explosion_score)} max={100} />
           <ScoreBar label="Trap" value={n(m.trap_score)} max={100} />
-          <p className="caption-mono mt-1 text-[11px] text-text-muted">
+          <p className="caption-mono mt-1 text-[13px] text-text-muted">
             Expected value {ev != null ? `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%` : "—"}
             {" · "}
             Fair {fair != null ? `${(fair * 100).toFixed(0)}%` : "—"} vs implied{" "}

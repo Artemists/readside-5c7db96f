@@ -111,7 +111,7 @@ function MatchDetail() {
         {/* 1. HEADER */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="caption-mono text-[11px] uppercase text-text-muted">
+            <span className="caption-mono text-[13px] uppercase text-text-muted">
               {data.competition ?? data.sport}
             </span>
             <h1 className="line-clamp-2 text-[22px] font-semibold leading-tight text-text-primary">
@@ -130,14 +130,14 @@ function MatchDetail() {
           >
             {answerLine}
           </p>
-          <p className="text-[15px] leading-snug text-text-secondary">{answerReason}</p>
+          <p className="text-[15px] leading-relaxed text-text-secondary">{answerReason}</p>
           {thinData ? (
-            <p className="caption-mono text-[12px] text-text-disabled">
+            <p className="caption-mono text-[13px] text-text-muted">
               Thin data · one bookmaker
             </p>
           ) : null}
           {data.provisional ? (
-            <p className="caption-mono text-[12px] text-text-disabled">
+            <p className="caption-mono text-[13px] text-text-muted">
               Provisional · price may move before kickoff
             </p>
           ) : null}
@@ -167,16 +167,16 @@ function MatchDetail() {
                 </p>
               ) : null}
             </div>
-            <p className={`text-[15px] font-medium leading-snug ${priceVerdictClass}`}>
+            <p className={`text-[15px] font-medium leading-relaxed ${priceVerdictClass}`}>
               {priceVerdict}
             </p>
             {edge != null && edge < 0 ? (
-              <p className="text-[13px] leading-snug text-text-muted">
+              <p className="text-[15px] leading-relaxed text-text-muted">
                 This doesn't mean they'll lose — it means the odds aren't worth taking.
               </p>
             ) : null}
             {edge != null ? (
-              <p className="caption-mono text-[12px] text-text-disabled">
+              <p className="caption-mono text-[13px] text-text-muted">
                 Edge {edge >= 0 ? "+" : ""}
                 {edge.toFixed(1)}%
               </p>
@@ -186,7 +186,7 @@ function MatchDetail() {
 
         {/* 4. STAKE */}
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[14px] text-text-muted">Suggested stake</span>
+          <span className="text-[15px] text-text-muted">Suggested stake</span>
           <span
             className={`text-[16px] font-semibold ${
               isPass ? "text-text-muted" : "text-accent"
@@ -199,18 +199,18 @@ function MatchDetail() {
         {/* 5. CONFIDENCE */}
         <div className="flex flex-col gap-1">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-[14px] text-text-muted">Confidence</span>
+            <span className="text-[15px] text-text-muted">Confidence</span>
             <span className="flex items-baseline gap-2">
               <span className="text-[16px] font-semibold text-text-primary">
                 {confidenceWord(confidence)}
               </span>
-              <span className="caption-mono text-[12px] text-text-disabled">
+              <span className="caption-mono text-[13px] text-text-muted">
                 {confidence.toFixed(1)}/10
               </span>
             </span>
           </div>
           {isPass ? (
-            <p className="caption-mono text-right text-[11px] text-text-disabled">
+            <p className="caption-mono text-right text-[13px] text-text-muted">
               read only · not a bet endorsement
             </p>
           ) : null}
@@ -222,7 +222,7 @@ function MatchDetail() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="caption-mono self-start text-[11px] uppercase text-accent"
+          className="caption-mono self-start text-[13px] uppercase text-accent"
         >
           {open ? "− Full breakdown" : "+ Full breakdown"}
         </button>
@@ -325,7 +325,7 @@ function ScoreRow({
   return (
     <div className="flex flex-col gap-1">
       <StatBar label={label} value={Math.round(value)} max={max} />
-      <span className="caption-mono pl-20 text-text-disabled">{hint}</span>
+      <span className="caption-mono pl-20 text-[13px] text-text-muted">{hint}</span>
     </div>
   );
 }

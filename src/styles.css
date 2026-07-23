@@ -64,11 +64,12 @@
   --popover: oklch(0.26 0.04 246);
   --popover-foreground: oklch(0.97 0.005 240);
 
-  /* Text scale */
+  /* Text scale — tuned to hit WCAG AA (4.5:1) on card-inner surfaces. */
   --text-primary: oklch(0.97 0.005 240);      /* #f5f8fa */
-  --text-secondary: oklch(0.80 0.018 246);    /* #aebecc */
-  --text-muted: oklch(0.66 0.028 246);        /* #7c93a8 */
-  --text-disabled: oklch(0.52 0.03 246);      /* #5a7085 */
+  --text-secondary: oklch(0.85 0.02 246);     /* lifted from 0.80 */
+  --text-muted: oklch(0.74 0.028 246);        /* lifted from 0.66 — passes AA */
+  --text-disabled: oklch(0.66 0.028 246);     /* lifted from 0.52 — now passes AA; used for meaningful caveats */
+
 
   /* Brand accent — Volt */
   --primary: oklch(0.9 0.2 125);              /* #c6f135 */
@@ -129,7 +130,7 @@
   font-family: var(--font-mono);
   font-weight: 400;
   font-size: 13px;
-  line-height: 18px;
+  line-height: 20px;
   color: var(--color-text-muted);
 }
 

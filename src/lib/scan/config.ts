@@ -13,7 +13,7 @@ export const SCORING = {
     tierKeywords: [
       // Hard downgrades — regional, youth, reserve, semi-pro. Match FIRST so
       // they beat any generic "premier"/"liga" fallback below.
-      { match: /\b(reserves?|youth|u-?15|u-?17|u-?19|u-?20|u-?21|u-?23|academy|primavera|regional|state league|northern territory|tasmania|capital territory|npl\b|amateur|semi[- ]?pro|third division|3\. liga|serie c|serie d|national league north|national league south|isthmian|conference (north|south)|oberliga|regionalliga|liga 3|segunda b|primera federaci[oó]n|tercera|friendl(y|ies))\b/i, tier: 0.15 },
+      { match: /\b(reserves?|youth|u-?15|u-?17|u-?19|u-?20|u-?21|u-?23|academy|primavera|regional|provincial|state league|northern territory|tasmania|capital territory|queensland|victoria(n)? premier|western australia|south australia|new south wales|npl\b|amateur|semi[- ]?pro|third division|3\. liga|serie c|serie d|national league north|national league south|isthmian|conference (north|south)|oberliga|regionalliga|liga 3|segunda b|primera federaci[oó]n|tercera|friendl(y|ies))\b/i, tier: 0.15 },
       // Women's football: only top-tier competitions are tier 1; other women's leagues stay mid.
       { match: /\bwomen('s)?\b.*\b(world cup|champions league|euro)\b|\b(w-?league|wsl|nwsl|frauen-bundesliga)\b/i, tier: 0.8 },
       { match: /\bwomen('s)?\b/i, tier: 0.35 },
