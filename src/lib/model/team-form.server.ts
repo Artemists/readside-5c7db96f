@@ -30,12 +30,20 @@ function normaliseName(name: string): string {
     .trim();
 }
 
+export class ApiFootballError extends Error {
+  status: number;
+  constructor(status: number, path: string) {
+    super(`api-football ${path} → ${status}`);
+    this.status = status;
+  }
+}
+
 async function apiGet(path: string, key: string): Promise<unknown> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "x-apisports-key": key },
   });
   if (!res.ok) {
-    throw new Error(`api-football ${path} → ${res.status}`);
+    throw new ApiFootballError(res.status, path);
   }
   return await res.json();
 }
