@@ -154,11 +154,11 @@ function MorningBriefing() {
             onClick={() => setConditionsOpen((v) => !v)}
             className="flex min-h-[44px] items-center justify-between gap-3 text-left"
           >
-            <span className="text-[13px] text-text-secondary">
+            <span className="text-[15px] leading-relaxed text-text-secondary">
               {conditions.summary}
             </span>
             {conditions.bullets.length > 0 ? (
-              <span className="caption-mono shrink-0 text-[11px] text-text-muted">
+              <span className="caption-mono shrink-0 text-[13px] text-text-muted">
                 {conditionsOpen ? "−" : "+"}
               </span>
             ) : null}
@@ -167,7 +167,7 @@ function MorningBriefing() {
         {conditionsOpen && conditions.bullets.length > 0 ? (
           <ul className="flex flex-col gap-1.5 pl-3">
             {conditions.bullets.map((b) => (
-              <li key={b} className="text-[13px] text-text-muted">
+              <li key={b} className="text-[15px] leading-relaxed text-text-muted">
                 · {b}
               </li>
             ))}
