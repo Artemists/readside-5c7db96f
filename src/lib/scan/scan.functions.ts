@@ -324,8 +324,9 @@ export const probeProviderCoverage = createServerFn({ method: "POST" }).handler(
  */
 export const probeBookmakerCoverage = createServerFn({ method: "POST" }).handler(
   async () => {
-    const apiKey = process.env.ODDS_API_IO_KEY;
+    const apiKey: string = process.env.ODDS_API_IO_KEY ?? "";
     if (!apiKey) throw new Error("Missing ODDS_API_IO_KEY");
+
     const BASE = "https://api.odds-api.io/v3";
     const MAX_CALLS = 12;
     let used = 0;
