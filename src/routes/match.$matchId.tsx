@@ -100,27 +100,50 @@ function MatchDetail() {
 
         <Divider />
 
-        <SectionLabel>Recommendation</SectionLabel>
-        <div className="flex flex-col gap-2">
-          <KeyValueRow k="Market" v={data.recommended_market ?? "—"} />
-          <KeyValueRow k="Selection" v={data.recommended_selection ?? "—"} />
-          <KeyValueRow k="Best odds" v={bestOdds != null ? bestOdds.toFixed(2) : "—"} />
-          <KeyValueRow
-            k="Fair probability"
-            v={fair != null ? `${(fair * 100).toFixed(1)}%` : "—"}
-          />
-          <KeyValueRow
-            k="Implied probability"
-            v={implied != null ? `${(implied * 100).toFixed(1)}%` : "—"}
-          />
-          <KeyValueRow k="Edge" v={edge != null ? `${edge.toFixed(1)}%` : "—"} />
-          <KeyValueRow k="Expected value" v={ev != null ? `${ev.toFixed(1)}%` : "—"} />
-          <KeyValueRow k="Confidence" v={`${Number(data.confidence).toFixed(1)} / 10`} />
-          <KeyValueRow
-            k="Stake"
-            v={<span className={data.stake === "Small" ? "text-accent" : "text-text-muted"}>{data.stake}</span>}
-          />
-        </div>
+        {(() => {
+          const isIgnore = data.verdict === "ignore";
+          const isPass = data.stake === "Pass";
+          return (
+            <>
+              <SectionLabel>
+                {isIgnore ? "Best available selection (not advised)" : "Recommendation"}
+              </SectionLabel>
+              {isIgnore ? (
+                <p className="caption-mono text-text-muted">
+                  This match did not clear the model's thresholds. The selection
+                  below is shown for transparency only — do not treat it as a pick.
+                </p>
+              ) : null}
+              <div className={`flex flex-col gap-2 ${isIgnore ? "opacity-70" : ""}`}>
+                <KeyValueRow k="Market" v={data.recommended_market ?? "—"} />
+                <KeyValueRow k="Selection" v={data.recommended_selection ?? "—"} />
+                <KeyValueRow k="Best odds" v={bestOdds != null ? bestOdds.toFixed(2) : "—"} />
+                <KeyValueRow
+                  k="Fair probability"
+                  v={fair != null ? `${(fair * 100).toFixed(1)}%` : "—"}
+                />
+                <KeyValueRow
+                  k="Implied probability"
+                  v={implied != null ? `${(implied * 100).toFixed(1)}%` : "—"}
+                />
+                <KeyValueRow k="Edge" v={edge != null ? `${edge.toFixed(1)}%` : "—"} />
+                <KeyValueRow k="Expected value" v={ev != null ? `${ev.toFixed(1)}%` : "—"} />
+                {isPass ? (
+                  <KeyValueRow
+                    k="Confidence in read"
+                    v={`${Number(data.confidence).toFixed(1)} / 10 · not a bet endorsement`}
+                  />
+                ) : (
+                  <KeyValueRow k="Confidence" v={`${Number(data.confidence).toFixed(1)} / 10`} />
+                )}
+                <KeyValueRow
+                  k="Stake"
+                  v={<span className={data.stake === "Small" ? "text-accent" : "text-text-muted"}>{data.stake}</span>}
+                />
+              </div>
+            </>
+          );
+        })()}
 
         <Divider />
 
