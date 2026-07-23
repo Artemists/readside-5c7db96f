@@ -208,18 +208,21 @@ export type Database = {
       team_ids: {
         Row: {
           name: string
+          not_found: boolean
           resolved_at: string
-          team_id: number
+          team_id: number | null
         }
         Insert: {
           name: string
+          not_found?: boolean
           resolved_at?: string
-          team_id: number
+          team_id?: number | null
         }
         Update: {
           name?: string
+          not_found?: boolean
           resolved_at?: string
-          team_id?: number
+          team_id?: number | null
         }
         Relationships: []
       }
