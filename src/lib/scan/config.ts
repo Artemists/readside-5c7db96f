@@ -59,23 +59,24 @@ export const SCORING = {
     maxAllowedOdds: 6.0,
     // Minimum bookmakers that must quote the selection for a real value read.
     minBooksForValue: 2,
-    // WHY singleBookPolicy = "model": with a 2-book plan and near-identical
-    // books, market de-vig is mathematically ~ -½ × overround edge on every
-    // selection (edge ≈ -½ × overround by construction), so market-only
-    // pricing cannot produce positive edge. Polymarket covers 0/30 of our
-    // slate. The independent Poisson model is the only fair source that
-    // scales. The model is unvalidated — downstream dampers
-    // (modelConfidenceFactor, hard disqualifiers, UI honesty label) keep
-    // that read honest.
+    // Market de-vig cannot produce positive edge on our plan: odds-api.io caps us
+    // at Bet365 + Novibet, which price near-identically, so marketFair ≈ bestImplied
+    // and edge ≈ −½ × overround by construction — negative on every event.
+    // Polymarket (the independent prediction-market source) matched 0 of 30 of our
+    // fixtures, since it only covers elite competitions. API-Football has form data
+    // for nearly every league our odds provider returns, so the Poisson model is the
+    // only fair source that scales to the full slate.
+    // The model is NOT yet validated against settled results. Everything downstream
+    // (modelConfidenceFactor, the "Model-priced · not yet validated" UI label, and
+    // per-source breakdowns in getPerformanceStats) exists to keep that honest.
     singleBookPolicy: "model" as "block" | "model",
     // Which source produces the fair probability used to compute edge:
-    //   "market" — de-vigged consensus across bookmakers (legacy).
-    //   "model"  — independent Poisson model whenever it has a probability.
-    //   "auto"   — use model whenever a model probability exists for that
-    //              selection, regardless of book count; fall back to market
-    //              de-vig only when the model has nothing. With 2 aligned
-    //              books market de-vig is not a real consensus, so the
-    //              model is the better reference even when both books quote.
+    //   "market" — always use book de-vig (old behaviour)
+    //   "model"  — always use the model where available
+    //   "auto"   — prefer the model when it has a probability for the selection,
+    //              fall back to market de-vig otherwise. With 2 aligned books,
+    //              de-vig is not a real consensus, so the model is the better
+    //              reference even when both books quote.
     fairSource: "auto" as "market" | "model" | "auto",
     // Confidence multiplier applied whenever the winning selection was priced
     // against the independent model (source = "model" or "model_single_book").
