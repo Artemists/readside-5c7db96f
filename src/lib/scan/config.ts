@@ -5,15 +5,25 @@
 export const SCORING = {
   // ------- Context (0..10) -------
   context: {
-    // A tier score for the competition text (0..1). Anything not listed = 0.3.
+    // A tier score for the competition text (0..1). Anything not listed = default.
+    // Odds-api.io tends to prefix competitions with a country ("Italy - Serie A",
+    // "Ecuador - Serie A"), so tier-1 rules REQUIRE the correct country prefix.
+    // Generic name-only matches (e.g. bare "serie a", "premier") are intentionally
+    // NOT tier 1 — a league called "Serie A" outside Italy is not the Italian top flight.
     tierKeywords: [
-      { match: /world cup|champions league|super bowl|nba finals|grand slam|wimbledon|us open|roland|australian open|premier league|la liga|serie a|bundesliga|ligue 1|europa league|wnba playoffs|nba playoffs/i, tier: 1.0 },
-      { match: /nba|wnba|mlb|nhl|nfl|primeira|eredivisie|championship|liga mx|copa libertadores|copa sudamericana|euroleague|atp|wta/i, tier: 0.85 },
-      { match: /brasileiro|argentina|j.?league|k.?league|mls|challenger|conference league/i, tier: 0.65 },
-      { match: /liga|serie|division|premier|super|cup|coupe|copa/i, tier: 0.45 },
+      // Global / continental elite
+      { match: /\b(fifa\s+)?world cup\b|uefa champions league|uefa europa league|copa america|euro(pean)? championship|super bowl|nba finals|nba playoffs|wnba finals|wnba playoffs|wimbledon|us open|roland[- ]?garros|australian open|the masters|the open championship/i, tier: 1.0 },
+      // Top-5 European football leagues, country-qualified
+      { match: /(^|[^a-z])(england|english)[^a-z].*premier league|(^|[^a-z])spain[^a-z].*(la\s*liga|primera divisi[oó]n)|(^|[^a-z])italy[^a-z].*serie a\b|(^|[^a-z])germany[^a-z].*bundesliga\b|(^|[^a-z])france[^a-z].*ligue 1\b/i, tier: 1.0 },
+      // Strong second tier — major North American / South American / European cups
+      { match: /\bnba\b|\bwnba\b|\bmlb\b|\bnhl\b|\bnfl\b|(^|[^a-z])portugal[^a-z].*primeira|(^|[^a-z])netherlands[^a-z].*eredivisie|(^|[^a-z])england[^a-z].*championship|liga mx|copa libertadores|copa sudamericana|euroleague|\batp\b|\bwta\b|uefa conference league|fa cup|coupe de france|copa del rey|dfb[- ]pokal|coppa italia/i, tier: 0.75 },
+      // Mid tier known leagues
+      { match: /brasileir(o|ao|ão)|argentin(a|e).*primera|j[.\s-]?league|k[.\s-]?league|\bmls\b|challenger|(^|[^a-z])scotland[^a-z].*premiership|(^|[^a-z])belgium[^a-z].*(pro league|jupiler)|(^|[^a-z])turkey[^a-z].*s(ü|u)per lig|primeira liga|(^|[^a-z])switzerland[^a-z].*super league/i, tier: 0.55 },
+      // Very generic keyword fallback — weak signal, must not lift obscure leagues to tier 1.
+      { match: /\b(liga|serie|division|premier|super|cup|coupe|copa)\b/i, tier: 0.35 },
     ],
     // Unknown competition → low tier so it produces spread against known leagues.
-    tierDefault: 0.25,
+    tierDefault: 0.2,
     weights: { markets: 0.30, bookmakers: 0.20, tier: 0.50 },
     marketsCap: 4,       // 4+ markets => full points
     bookmakersCap: 2,    // plan allows 2 bookmakers max

@@ -143,6 +143,8 @@ export function MatchCard({ m }: { m: MatchCardData }) {
   const fair = n(m.fair_probability);
   const implied = n(m.implied_probability);
   const isOpp = m.verdict === "opportunity";
+  const isIgnore = m.verdict === "ignore";
+  const isPass = (m.stake ?? "Pass") === "Pass";
   const summary = summarySentence(m);
   const decision = decisionPhrase(m);
 
@@ -174,18 +176,28 @@ export function MatchCard({ m }: { m: MatchCardData }) {
       </div>
 
       {/* Decision */}
-      <div className="mt-3 flex items-baseline justify-between gap-3">
-        <span className="min-w-0 truncate text-[20px] font-bold leading-tight text-text-primary">
-          {decision}
-        </span>
-        <span className="shrink-0 text-[20px] font-bold leading-tight text-accent">
-          {odds != null ? `@ ${odds.toFixed(2)}` : "Odds pending"}
-        </span>
-      </div>
+      {isIgnore ? (
+        <div className="mt-3">
+          <span className="text-[20px] font-bold leading-tight text-text-muted">
+            No bet
+          </span>
+        </div>
+      ) : (
+        <div className="mt-3 flex items-baseline justify-between gap-3">
+          <span className="min-w-0 truncate text-[20px] font-bold leading-tight text-text-primary">
+            {decision}
+          </span>
+          <span className="shrink-0 text-[20px] font-bold leading-tight text-accent">
+            {odds != null ? `@ ${odds.toFixed(2)}` : "Odds pending"}
+          </span>
+        </div>
+      )}
 
       {/* Stake line */}
       <p className="caption-mono mt-3 text-[13px] text-text-muted">
-        {(m.stake ?? "Pass")} · {confidenceLabel(confidence)} confidence
+        {isIgnore
+          ? "Pass · not advised"
+          : `${m.stake ?? "Pass"} · ${confidenceLabel(confidence)}${isPass ? " read" : " confidence"}`}
       </p>
       {m.provisional ? (
         <p className="caption-mono mt-1 text-[12px] text-text-disabled">
@@ -207,6 +219,12 @@ export function MatchCard({ m }: { m: MatchCardData }) {
 
       {open ? (
         <div className="mt-3 flex flex-col gap-2.5">
+          {isIgnore && (decision !== "Awaiting selection") ? (
+            <p className="caption-mono text-[12px] text-text-muted">
+              Best available: {decision}
+              {odds != null ? ` @ ${odds.toFixed(2)}` : ""} — not advised.
+            </p>
+          ) : null}
           <ScoreBar label="Value" value={n(m.value_score)} max={100} accent />
           <ScoreBar label="Context" value={n(m.context_score)} max={10} />
           <ScoreBar label="Explosion" value={n(m.explosion_score)} max={100} />

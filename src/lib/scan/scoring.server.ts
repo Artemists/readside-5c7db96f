@@ -56,6 +56,7 @@ type TotalsQuote = { line: number; over: number; under: number; book: string };
 function extractOverUnderBy(
   event: OddsEvent,
   matcher: (name: string) => boolean,
+  debugLabel?: string,
 ): TotalsQuote[] {
   const out: TotalsQuote[] = [];
   const books = event.bookmakers ?? {};
@@ -63,27 +64,48 @@ function extractOverUnderBy(
     const ou = markets.find((m) => matcher((m.name ?? "").toLowerCase()));
     const row = ou?.odds?.[0];
     if (!row) continue;
-    const line = typeof row.max === "number" ? row.max : typeof row.hdp === "number" ? row.hdp : null;
+    // Providers occasionally return the line as a string; num() copes with both.
+    // Prefer `max` (odds-api.io's over/under line field), fall back to `hdp`.
+    const line = num(row.max) ?? num(row.hdp);
     const over = num(row.over);
     const under = num(row.under);
+    if (debugLabel) {
+      console.log("scoring:ou-raw", {
+        event: event.id,
+        label: debugLabel,
+        market: ou?.name,
+        book: bookName,
+        rawMax: row.max,
+        rawHdp: row.hdp,
+        parsedLine: line,
+        over,
+        under,
+      });
+    }
     if (line == null || over == null || under == null) continue;
     out.push({ line, over, under, book: bookName });
   }
   return out;
 }
 
-function extractTotals(event: OddsEvent): TotalsQuote[] {
-  return extractOverUnderBy(event, (n) =>
-    n === "totals" || n === "over/under" || n === "o/u",
+function extractTotals(event: OddsEvent, debug = false): TotalsQuote[] {
+  return extractOverUnderBy(
+    event,
+    (n) => n === "totals" || n === "over/under" || n === "o/u",
+    debug ? "totals" : undefined,
   );
 }
 
-export function extractCorners(event: OddsEvent): TotalsQuote[] {
-  return extractOverUnderBy(event, (n) => n.includes("corner"));
+export function extractCorners(event: OddsEvent, debug = false): TotalsQuote[] {
+  return extractOverUnderBy(event, (n) => n.includes("corner"), debug ? "corners" : undefined);
 }
 
-export function extractCards(event: OddsEvent): TotalsQuote[] {
-  return extractOverUnderBy(event, (n) => n.includes("card") || n.includes("booking"));
+export function extractCards(event: OddsEvent, debug = false): TotalsQuote[] {
+  return extractOverUnderBy(
+    event,
+    (n) => n.includes("card") || n.includes("booking"),
+    debug ? "cards" : undefined,
+  );
 }
 
 
@@ -435,11 +457,12 @@ function buildReasoning(
   return `${prefix}${edge} Context: ${parts.ctx}. Explosion: ${parts.exp}. Value: ${parts.val}. Trap: ${parts.trap}.`;
 }
 
-export function scoreEvent(event: OddsEvent): ScoredMatch {
+export function scoreEvent(event: OddsEvent, opts: { debugLines?: boolean } = {}): ScoredMatch {
+  const debug = !!opts.debugLines;
   const quotes = extractMoneylines(event);
-  const totalsQuotes = extractTotals(event);
-  const cornersQuotes = extractCorners(event);
-  const cardsQuotes = extractCards(event);
+  const totalsQuotes = extractTotals(event, debug);
+  const cornersQuotes = extractCorners(event, debug);
+  const cardsQuotes = extractCards(event, debug);
   const ctx = contextScore(event);
   const mlMarket = evaluateMoneyline(quotes);
   const totalsMarket = evaluateTotals(totalsQuotes);
