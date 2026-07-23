@@ -59,7 +59,8 @@ export const runDailyScan = createServerFn({ method: "POST" })
       }
     } else {
       // Non-force (auto): reuse only if today already has a successful scan
-      // that actually scored at least one fixture.
+      // that actually scored at least one fixture AND is fresher than the
+      // auto-scan cadence. Older-than-cadence rows fall through to a real scan.
       const { data: lastOkArr } = await supabaseAdmin
         .from("scans")
         .select("id, scanned_at, fixtures_count, status, api_calls")
@@ -70,16 +71,19 @@ export const runDailyScan = createServerFn({ method: "POST" })
         .limit(1);
       const lastOk = lastOkArr?.[0];
       if (lastOk) {
-        return {
-          reused: true,
-          rateLimited: false,
-          scanId: lastOk.id,
-          scannedAt: lastOk.scanned_at,
-          fixturesCount: lastOk.fixtures_count,
-          status: lastOk.status,
-          apiCalls: lastOk.api_calls ?? 0,
-          nextAvailableAt: null,
-        };
+        const ageMin = (now - new Date(lastOk.scanned_at).getTime()) / 60000;
+        if (ageMin < SCAN.autoScanIntervalHours * 60) {
+          return {
+            reused: true,
+            rateLimited: false,
+            scanId: lastOk.id,
+            scannedAt: lastOk.scanned_at,
+            fixturesCount: lastOk.fixtures_count,
+            status: lastOk.status,
+            apiCalls: lastOk.api_calls ?? 0,
+            nextAvailableAt: null,
+          };
+        }
       }
     }
 
