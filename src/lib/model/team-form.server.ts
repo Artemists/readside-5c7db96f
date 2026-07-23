@@ -30,19 +30,70 @@ function normaliseName(name: string): string {
     .trim();
 }
 
+export class ApiFootballError extends Error {
+  status: number;
+  constructor(status: number, path: string) {
+    super(`api-football ${path} → ${status}`);
+    this.status = status;
+  }
+}
+
 async function apiGet(path: string, key: string): Promise<unknown> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "x-apisports-key": key },
   });
   if (!res.ok) {
-    throw new Error(`api-football ${path} → ${res.status}`);
+    throw new ApiFootballError(res.status, path);
   }
   return await res.json();
 }
 
 // -------------------- findTeamId --------------------
 
-export async function findTeamId(name: string): Promise<number | null> {
+const NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export type TeamLookupDebug = {
+  name: string;
+  query: string;
+  hits: number;
+  hitNames: string[];
+  rejectedByExactMatch: boolean;
+  apiError?: string;
+};
+
+export type TeamLookupStats = {
+  negativeCacheHits: number;
+  apiErrors: number;
+  rateLimited: boolean;
+  debug: TeamLookupDebug[];
+  debugCap: number;
+};
+
+export function makeLookupStats(debugCap = 3): TeamLookupStats {
+  return {
+    negativeCacheHits: 0,
+    apiErrors: 0,
+    rateLimited: false,
+    debug: [],
+    debugCap,
+  };
+}
+
+async function searchTeams(
+  key: string,
+  query: string,
+): Promise<Array<{ team?: { id?: number; name?: string } }>> {
+  const body = (await apiGet(
+    `/teams?search=${encodeURIComponent(query)}`,
+    key,
+  )) as { response?: Array<{ team?: { id?: number; name?: string } }> };
+  return body.response ?? [];
+}
+
+export async function findTeamId(
+  name: string,
+  stats?: TeamLookupStats,
+): Promise<number | null> {
   const key = readKey();
   if (!key) return null;
   const norm = normaliseName(name);
@@ -51,31 +102,104 @@ export async function findTeamId(name: string): Promise<number | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: cached } = await supabaseAdmin
     .from("team_ids")
-    .select("team_id")
+    .select("team_id, not_found, resolved_at")
     .eq("name", norm)
     .maybeSingle();
-  if (cached?.team_id) return cached.team_id;
+  if (cached) {
+    if (cached.team_id && !cached.not_found) return cached.team_id;
+    if (cached.not_found) {
+      const age = Date.now() - new Date(cached.resolved_at).getTime();
+      if (age < NEGATIVE_CACHE_TTL_MS) {
+        if (stats) stats.negativeCacheHits++;
+        return null;
+      }
+      // TTL expired — allow one retry below.
+    }
+  }
 
-  try {
-    const body = (await apiGet(
-      `/teams?search=${encodeURIComponent(norm)}`,
-      key,
-    )) as { response?: Array<{ team?: { id?: number; name?: string } }> };
-    const hits = body.response ?? [];
-    if (!hits.length) return null;
-    // Prefer exact-normalised match on returned team.name.
+  // Circuit-break: once we hit a rate limit during this scan, don't burn
+  // more requests — every subsequent call will hit the same wall.
+  if (stats?.rateLimited) return null;
+
+  const tryQuery = async (
+    q: string,
+  ): Promise<{ id: number | null; hits: Array<{ team?: { id?: number; name?: string } }>; rejectedByExactMatch: boolean }> => {
+    const hits = await searchTeams(key, q);
+    if (!hits.length) return { id: null, hits, rejectedByExactMatch: false };
     const exact = hits.find(
       (h) => h.team?.name && normaliseName(h.team.name) === norm,
     );
     const pick = exact ?? hits[0];
     const id = pick.team?.id ?? null;
-    if (!id) return null;
-    await supabaseAdmin
-      .from("team_ids")
-      .upsert({ name: norm, team_id: id, resolved_at: new Date().toISOString() });
-    return id;
+    const rejectedByExactMatch = !exact && hits.length > 0;
+    return { id: id ?? null, hits, rejectedByExactMatch };
+  };
+
+  const recordDebug = (entry: TeamLookupDebug) => {
+    if (!stats) return;
+    if (stats.debug.length < stats.debugCap) stats.debug.push(entry);
+  };
+
+  const persistNotFound = async () => {
+    await supabaseAdmin.from("team_ids").upsert({
+      name: norm,
+      team_id: null,
+      not_found: true,
+      resolved_at: new Date().toISOString(),
+    });
+  };
+
+  try {
+    const primary = await tryQuery(name.trim());
+    let picked = primary;
+    let queryUsed = name.trim();
+
+    if (primary.hits.length === 0) {
+      const fallback = await tryQuery(norm);
+      if (fallback.hits.length > 0 || fallback.id != null) {
+        picked = fallback;
+        queryUsed = norm;
+      }
+    }
+
+    if (picked.id == null) {
+      recordDebug({
+        name,
+        query: queryUsed,
+        hits: picked.hits.length,
+        hitNames: picked.hits.slice(0, 5).map((h) => h.team?.name ?? "?"),
+        rejectedByExactMatch: picked.rejectedByExactMatch,
+      });
+      await persistNotFound();
+      return null;
+    }
+
+    await supabaseAdmin.from("team_ids").upsert({
+      name: norm,
+      team_id: picked.id,
+      not_found: false,
+      resolved_at: new Date().toISOString(),
+    });
+    return picked.id;
   } catch (err) {
-    console.error("model: findTeamId failed for", name, err);
+    const status = err instanceof ApiFootballError ? err.status : 0;
+    if (stats) {
+      stats.apiErrors++;
+      if (status === 429) stats.rateLimited = true;
+      recordDebug({
+        name,
+        query: name.trim(),
+        hits: 0,
+        hitNames: [],
+        rejectedByExactMatch: false,
+        apiError: status ? `HTTP ${status}` : String(err),
+      });
+    }
+    // Don't spam the console with the same 429 repeatedly.
+    if (status !== 429 || (stats && stats.apiErrors <= 1)) {
+      console.error("model: findTeamId failed for", name, err);
+    }
+    // Do NOT persist as not_found — the team may exist; the API refused us.
     return null;
   }
 }
@@ -220,9 +344,10 @@ export type ModelFailure = "no_key" | "team_unresolved" | "insufficient_form";
 export async function getModelInputs(
   home: string,
   away: string,
+  stats?: TeamLookupStats,
 ): Promise<{ inputs: ModelInputs | null; reason: ModelFailure | null }> {
   if (!readKey()) return { inputs: null, reason: "no_key" };
-  const [homeId, awayId] = await Promise.all([findTeamId(home), findTeamId(away)]);
+  const [homeId, awayId] = await Promise.all([findTeamId(home, stats), findTeamId(away, stats)]);
   if (!homeId || !awayId) return { inputs: null, reason: "team_unresolved" };
   const [homeForm, awayForm, h2h] = await Promise.all([
     getRecentForm(homeId),

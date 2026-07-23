@@ -3,7 +3,7 @@ import { athensLocalDate } from "@/lib/time";
 import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
 import { scoreEvent, competitionTier } from "./scoring.server";
 import type { ScoredMatch } from "./types";
-import { getModelInputs, type ModelFailure } from "@/lib/model/team-form.server";
+import { getModelInputs, makeLookupStats, type ModelFailure } from "@/lib/model/team-form.server";
 import {
   attackDefenceRates,
   poissonMatchProbabilities,
@@ -184,6 +184,7 @@ export async function runScanNow() {
   };
   const shadowDisagreements: number[] = [];
   const avgSourceCounts = { perCompetition: 0, global: 0 };
+  const lookupStats = makeLookupStats(3);
   for (const e of events) {
     if (freshIds.has(e.id)) {
       reused++;
@@ -249,7 +250,7 @@ export async function runScanNow() {
       let modelReason: ModelFailure | null = null;
       let avgUsed: number | null = null;
       let avgSource: "perCompetition" | "global" = "global";
-      const { inputs, reason } = await getModelInputs(merged.home, merged.away);
+      const { inputs, reason } = await getModelInputs(merged.home, merged.away, lookupStats);
       if (!inputs) {
         modelReason = reason ?? null;
       } else {
@@ -624,7 +625,15 @@ export async function runScanNow() {
         ? Math.round(meanAbsModelMarketDiff * 10000) / 10000
         : null,
     },
+    teamLookup: {
+      negativeCacheHits: lookupStats.negativeCacheHits,
+      apiErrors: lookupStats.apiErrors,
+      rateLimited: lookupStats.rateLimited,
+    },
   });
+  for (const d of lookupStats.debug) {
+    console.log("scan:team-unresolved", d);
+  }
   console.log("scan:funnel", {
     scored: scored.length,
     verdicts: verdictCounts,
