@@ -390,7 +390,7 @@ function buildValueResult(
       fairProb: null, impliedProb: null, evPercent: null,
       note: "no priced markets available",
       winnerSource: null,
-      audit: { booksSeen: [], hasDraw: false, selections: [], winner: null, winnerSource: null, disqualifier: "no_market" },
+      audit: { booksSeen: [], hasDraw: false, selections: [], winner: null, winnerSource: null, dataQuality: null, disqualifier: "no_market" },
       winnerMarket: null,
     };
   }
@@ -414,7 +414,8 @@ function buildValueResult(
       winnerSource: null,
       audit: {
         booksSeen: best.booksSeen, hasDraw: best.hasDraw,
-        selections: best.selections, winner: null, winnerSource: null, disqualifier: w.disqualifier,
+        selections: best.selections, winner: null, winnerSource: null,
+        dataQuality: w.dataQuality, disqualifier: w.disqualifier,
       },
       winnerMarket: best.market,
     };
@@ -426,8 +427,17 @@ function buildValueResult(
   const w = best.eligibleWinner!;
   const cap = cfg.edgePctForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
-  const score = clamp(50 + (clamped / cap) * 45, 0, 100);
-  const sourceTag = w.source === "model_single_book" ? " [model/single-book]" : "";
+  let score = clamp(50 + (clamped / cap) * 45, 0, 100);
+  // Thin-data dampening: winner priced by a single book (either against the
+  // market or via the shadow model) gets its Value pulled toward 50. Hard
+  // guards (long_shot, suspicious_edge) still apply upstream.
+  if (w.source === "single_book_market" || w.source === "model_single_book") {
+    score = 50 + (score - 50) * cfg.singleBookValuePenalty;
+  }
+  const sourceTag =
+    w.source === "model_single_book" ? " [model/single-book]"
+      : w.source === "single_book_market" ? " [single-book]"
+      : "";
   return {
     score: Math.round(score * 10) / 10,
     edgePercent: Math.round(w.edgePct * 100) / 100,
@@ -440,7 +450,8 @@ function buildValueResult(
     winnerSource: w.source,
     audit: {
       booksSeen: best.booksSeen, hasDraw: best.hasDraw,
-      selections: best.selections, winner: w.selection, winnerSource: w.source, disqualifier: null,
+      selections: best.selections, winner: w.selection, winnerSource: w.source,
+      dataQuality: w.dataQuality, disqualifier: null,
     },
     winnerMarket: best.market,
   };
