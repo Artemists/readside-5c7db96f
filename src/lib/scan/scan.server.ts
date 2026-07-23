@@ -166,6 +166,7 @@ export async function runScanNow() {
     ambiguousShape: 0,
     staleEndDate: 0,
     disagreements: [] as number[],
+    shadowEdges: [] as number[],
   };
   const pmToStore: Array<{ matchId: string; probs: PolymarketProbs }> = [];
 
