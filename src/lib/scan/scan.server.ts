@@ -1,4 +1,4 @@
-import { SCAN } from "./config";
+import { SCAN, SCORING } from "./config";
 import { athensLocalDate } from "@/lib/time";
 import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
 import { scoreEvent, competitionTier } from "./scoring.server";
@@ -9,6 +9,14 @@ import {
   poissonMatchProbabilities,
   type MatchProbabilities,
 } from "@/lib/model/rates";
+import {
+  fetchActiveSportsMarkets,
+  matchToPolymarket,
+  polymarketProbabilities,
+  getCachedPolymarket,
+  storeCachedPolymarket,
+  type PolymarketProbs,
+} from "@/lib/polymarket/gamma.server";
 
 
 type ScanStatus = "ok" | "partial" | "rate_limited" | "failed";
