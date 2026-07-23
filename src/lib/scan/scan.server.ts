@@ -115,7 +115,19 @@ export async function runScanNow() {
 
   // Pre-fetch existing fresh signals so we can skip re-fetching their odds.
   // Freshness is by match_id across the whole window (matches can span days).
+  // Near-kickoff events (within nearKickoffRefreshHours) are always re-priced
+  // regardless of eventFreshMinutes — those rows drive settlement's
+  // closing_odds and matter most for price accuracy.
   const freshCutoff = new Date(nowMs - SCAN.eventFreshMinutes * 60_000).toISOString();
+  const nearKickoffCutoffMs = nowMs + SCAN.nearKickoffRefreshHours * 3_600_000;
+  const nearKickoffIds = new Set(
+    events
+      .filter((e) => {
+        const t = e.date ? new Date(e.date).getTime() : NaN;
+        return Number.isFinite(t) && t <= nearKickoffCutoffMs;
+      })
+      .map((e) => e.id),
+  );
   const { data: freshRows } = events.length
     ? await supabaseAdmin
         .from("match_signals")
@@ -123,7 +135,11 @@ export async function runScanNow() {
         .in("match_id", events.map((e) => e.id))
         .gte("updated_at", freshCutoff)
     : { data: [] as Array<{ match_id: string; updated_at: string }> };
-  const freshIds = new Set((freshRows ?? []).map((r) => r.match_id));
+  const freshIds = new Set(
+    (freshRows ?? [])
+      .map((r) => r.match_id)
+      .filter((id) => !nearKickoffIds.has(id)),
+  );
 
   // 2) Fetch odds + score (skip fresh ones).
   const scored: ScoredMatch[] = [];

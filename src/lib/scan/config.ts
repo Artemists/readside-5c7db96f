@@ -100,11 +100,20 @@ export const STAKE = {
 export const SCAN = {
   // Kept for legacy reads; no longer used to auto-trigger scans on open.
   staleAfterMinutes: 30,
+  // How often the home page will auto-trigger a scan on mount if the last
+  // successful scan is older than this. Twice-daily cadence.
+  autoScanIntervalHours: 12,
   // Minimum interval between forced (button) scans — anti-double-tap only.
   forceCooldownMinutes: 5,
   // Per-event odds re-fetch threshold. If an event was scored within this
-  // window we reuse the stored row instead of calling the odds API.
-  eventFreshMinutes: 30,
+  // window we reuse the stored row instead of calling the odds API. Sized
+  // against the 12-hour auto cadence so back-to-back scans don't re-burn
+  // quota, while a single scheduled run always refreshes everything.
+  eventFreshMinutes: 660,
+  // Near-kickoff exception: always re-price events kicking off inside this
+  // window regardless of eventFreshMinutes. These are the rows where price
+  // accuracy actually matters (closing line, settlement).
+  nearKickoffRefreshHours: 6,
   // Hard cap on how many events we score per scan (quota control).
   maxEvents: 30,
   // How far ahead of "now" we pull fixtures for.
