@@ -438,7 +438,7 @@ export const probeBookmakerCoverage = createServerFn({ method: "POST" }).handler
         error: listingError,
         count: listingNames?.length ?? null,
         bookmakers: listingNames,
-        rawSample: listingNames ? null : listing.body,
+        rawSample: listingNames ? null : (listing.body != null ? JSON.stringify(listing.body).slice(0, 500) : null),
       },
       event: chosen
         ? { id: String(chosen.id), home: chosen.home, away: chosen.away, date: chosen.date }
