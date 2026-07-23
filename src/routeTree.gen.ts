@@ -13,7 +13,6 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MatchMatchIdRouteImport } from './routes/match.$matchId'
-import { Route as ApiPublicRunScanNowRouteImport } from './routes/api/public/run-scan-now'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -35,25 +34,18 @@ const MatchMatchIdRoute = MatchMatchIdRouteImport.update({
   path: '/match/$matchId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicRunScanNowRoute = ApiPublicRunScanNowRouteImport.update({
-  id: '/api/public/run-scan-now',
-  path: '/api/public/run-scan-now',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/matches': typeof MatchesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/match/$matchId': typeof MatchMatchIdRoute
-  '/api/public/run-scan-now': typeof ApiPublicRunScanNowRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/matches': typeof MatchesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/match/$matchId': typeof MatchMatchIdRoute
-  '/api/public/run-scan-now': typeof ApiPublicRunScanNowRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -61,30 +53,13 @@ export interface FileRoutesById {
   '/matches': typeof MatchesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/match/$matchId': typeof MatchMatchIdRoute
-  '/api/public/run-scan-now': typeof ApiPublicRunScanNowRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/matches'
-    | '/sitemap.xml'
-    | '/match/$matchId'
-    | '/api/public/run-scan-now'
+  fullPaths: '/' | '/matches' | '/sitemap.xml' | '/match/$matchId'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/matches'
-    | '/sitemap.xml'
-    | '/match/$matchId'
-    | '/api/public/run-scan-now'
-  id:
-    | '__root__'
-    | '/'
-    | '/matches'
-    | '/sitemap.xml'
-    | '/match/$matchId'
-    | '/api/public/run-scan-now'
+  to: '/' | '/matches' | '/sitemap.xml' | '/match/$matchId'
+  id: '__root__' | '/' | '/matches' | '/sitemap.xml' | '/match/$matchId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -92,7 +67,6 @@ export interface RootRouteChildren {
   MatchesRoute: typeof MatchesRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   MatchMatchIdRoute: typeof MatchMatchIdRoute
-  ApiPublicRunScanNowRoute: typeof ApiPublicRunScanNowRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -125,13 +99,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MatchMatchIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/run-scan-now': {
-      id: '/api/public/run-scan-now'
-      path: '/api/public/run-scan-now'
-      fullPath: '/api/public/run-scan-now'
-      preLoaderRoute: typeof ApiPublicRunScanNowRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -140,7 +107,6 @@ const rootRouteChildren: RootRouteChildren = {
   MatchesRoute: MatchesRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   MatchMatchIdRoute: MatchMatchIdRoute,
-  ApiPublicRunScanNowRoute: ApiPublicRunScanNowRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
