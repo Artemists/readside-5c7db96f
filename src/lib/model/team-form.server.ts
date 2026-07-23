@@ -327,8 +327,8 @@ export async function getHeadToHead(
     const body = (await apiGet(
       `/fixtures/headtohead?h2h=${homeId}-${awayId}&last=${limit}`,
       key,
-    )) as CachedForm;
-    return (body.fixtures ?? body.fixtures ?? [])
+    )) as { response?: ApiFixture[] };
+    return (body.response ?? [])
       .filter((f) => f.goals.home != null && f.goals.away != null)
       .slice(0, limit)
       .map((f) => ({
