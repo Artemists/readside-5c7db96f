@@ -149,7 +149,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
   const fair = n(m.fair_probability);
   const implied = n(m.implied_probability);
   const isOpp = m.verdict === "opportunity";
-  const isIgnore = m.verdict === "ignore";
+  const noBet = m.verdict === "ignore" || m.verdict === "trap";
   const isPass = (m.stake ?? "Pass") === "Pass";
   const summary = summarySentence(m);
   const decision = decisionPhrase(m);
@@ -182,7 +182,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
       </div>
 
       {/* Decision */}
-      {isIgnore ? (
+      {noBet ? (
         <div className="mt-3">
           <span className="text-[20px] font-bold leading-tight text-text-muted">
             No bet
@@ -201,8 +201,8 @@ export function MatchCard({ m }: { m: MatchCardData }) {
 
       {/* Stake line */}
       <p className="caption-mono mt-3 text-[13px] text-text-secondary">
-        {isIgnore
-          ? "Pass · not advised"
+        {noBet
+          ? "Not advised"
           : `${m.stake ?? "Pass"} · ${confidenceLabel(confidence)}${isPass ? " read" : " confidence"}`}
       </p>
       {dataQualityOf(m) === "single_book" || dataQualityOf(m) === "model_single_book" ? (
@@ -230,10 +230,16 @@ export function MatchCard({ m }: { m: MatchCardData }) {
 
       {open ? (
         <div className="mt-3 flex flex-col gap-2.5">
-          {isIgnore && (decision !== "Awaiting selection") ? (
+          {noBet && (decision !== "Awaiting selection") ? (
             <p className="caption-mono text-[13px] text-text-muted">
               Best available: {decision}
               {odds != null ? ` @ ${odds.toFixed(2)}` : ""} — not advised.
+            </p>
+          ) : null}
+          {noBet ? (
+            <p className="caption-mono text-[13px] text-text-muted">
+              Confidence {confidenceLabel(confidence)}
+              {confidence != null ? ` (${confidence.toFixed(1)}/10)` : ""}
             </p>
           ) : null}
           <ScoreBar label="Value" value={n(m.value_score)} max={100} accent />

@@ -59,7 +59,8 @@ export const runDailyScan = createServerFn({ method: "POST" })
       }
     } else {
       // Non-force (auto): reuse only if today already has a successful scan
-      // that actually scored at least one fixture.
+      // that actually scored at least one fixture AND is fresher than the
+      // auto-scan cadence. Older-than-cadence rows fall through to a real scan.
       const { data: lastOkArr } = await supabaseAdmin
         .from("scans")
         .select("id, scanned_at, fixtures_count, status, api_calls")
@@ -70,16 +71,19 @@ export const runDailyScan = createServerFn({ method: "POST" })
         .limit(1);
       const lastOk = lastOkArr?.[0];
       if (lastOk) {
-        return {
-          reused: true,
-          rateLimited: false,
-          scanId: lastOk.id,
-          scannedAt: lastOk.scanned_at,
-          fixturesCount: lastOk.fixtures_count,
-          status: lastOk.status,
-          apiCalls: lastOk.api_calls ?? 0,
-          nextAvailableAt: null,
-        };
+        const ageMin = (now - new Date(lastOk.scanned_at).getTime()) / 60000;
+        if (ageMin < SCAN.autoScanIntervalHours * 60) {
+          return {
+            reused: true,
+            rateLimited: false,
+            scanId: lastOk.id,
+            scannedAt: lastOk.scanned_at,
+            fixturesCount: lastOk.fixtures_count,
+            status: lastOk.status,
+            apiCalls: lastOk.api_calls ?? 0,
+            nextAvailableAt: null,
+          };
+        }
       }
     }
 
@@ -165,7 +169,7 @@ export const getTodayScanSummary = createServerFn({ method: "GET" }).handler(
 
     const nextScanAvailableAt = latest
       ? new Date(
-          new Date(latest.scanned_at).getTime() + SCAN.staleAfterMinutes * 60_000,
+          new Date(latest.scanned_at).getTime() + SCAN.autoScanIntervalHours * 3_600_000,
         ).toISOString()
       : null;
     const nextForceAvailableAt = latest
@@ -215,7 +219,7 @@ export const getMatchSignals = createServerFn({ method: "GET" })
   });
 
 const UPCOMING_COLUMNS =
-  "match_id, home, away, kickoff, competition, sport, verdict, ev_percent, edge_percent, value_score, trap_score, context_score, confidence, stake, recommended_market, recommended_selection, best_odds, provisional";
+  "match_id, home, away, kickoff, competition, sport, verdict, ev_percent, edge_percent, value_score, trap_score, context_score, explosion_score, confidence, stake, recommended_market, recommended_selection, best_odds, fair_probability, implied_probability, provisional, signals";
 
 function windowBounds() {
   const now = new Date();
