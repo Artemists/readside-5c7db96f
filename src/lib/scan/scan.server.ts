@@ -341,6 +341,9 @@ export async function runScanNow() {
   const disqCounts = { long_shot: 0, suspicious_edge: 0, no_market: 0 };
   const dqCounts = { multi_book: 0, single_book: 0, model_single_book: 0 };
   const edgePctsMulti: number[] = [];
+  const allSelectionEdges: number[] = [];
+  const overrounds: number[] = [];
+  let edgePositive = 0, edgeNonPositive = 0;
   const valueScores: number[] = [];
   const trapScores: number[] = [];
   const favImplieds: number[] = [];
@@ -351,14 +354,30 @@ export async function runScanNow() {
     valueScores.push(s.valueScore);
     trapScores.push(s.trapScore);
     const sig = s.signals as {
-      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; selections?: Array<{ dataQuality?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean }> } };
+      value?: { audit?: { disqualifier?: string | null; dataQuality?: string | null; booksSeen?: string[]; selections?: Array<{ dataQuality?: string; disqualifier?: string | null; edgePct?: number; eligible?: boolean; quotes?: Array<{ book: string; odds: number }> }> } };
       trap?: { favImplied?: number | null };
     };
     const dq = sig.value?.audit?.dataQuality;
     if (dq && dq in dqCounts) dqCounts[dq as keyof typeof dqCounts]++;
     const disq = sig.value?.audit?.disqualifier;
     if (disq && disq in disqCounts) disqCounts[disq as keyof typeof disqCounts]++;
-    for (const sel of sig.value?.audit?.selections ?? []) {
+    const sels = sig.value?.audit?.selections ?? [];
+    const books = sig.value?.audit?.booksSeen ?? [];
+    for (const b of books) {
+      let sum = 0;
+      let has = false;
+      for (const sel of sels) {
+        const q = sel.quotes?.find((x) => x.book === b);
+        if (q) { sum += 1 / q.odds; has = true; }
+      }
+      if (has) overrounds.push(sum);
+    }
+    for (const sel of sels) {
+      if (typeof sel.edgePct === "number") {
+        allSelectionEdges.push(sel.edgePct);
+        if (sel.edgePct > 0) edgePositive++;
+        else edgeNonPositive++;
+      }
       if (sel.dataQuality === "multi_book" && sel.eligible && typeof sel.edgePct === "number") {
         edgePctsMulti.push(sel.edgePct);
       }
