@@ -3,7 +3,7 @@ import { athensLocalDate } from "@/lib/time";
 import { fetchOddsForEvent, listEvents, type CallStatus } from "./fixtures.server";
 import { scoreEvent, competitionTier } from "./scoring.server";
 import type { ScoredMatch } from "./types";
-import { getModelInputs, type ModelFailure } from "@/lib/model/team-form.server";
+import { getModelInputs, makeLookupStats, type ModelFailure } from "@/lib/model/team-form.server";
 import {
   attackDefenceRates,
   poissonMatchProbabilities,
