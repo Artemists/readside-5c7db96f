@@ -77,8 +77,12 @@ export function poissonMatchProbabilities(
   homeDefence: number,
   awayAttack: number,
   awayDefence: number,
+  avgOverride?: number | null,
 ): MatchProbabilities {
-  const avg = MODEL_CONFIG.leagueAverageGoals;
+  const avg =
+    avgOverride != null && Number.isFinite(avgOverride) && avgOverride > 0
+      ? avgOverride
+      : MODEL_CONFIG.leagueAverageGoals;
   const ha = MODEL_CONFIG.homeAdvantage;
   const lambdaHome = Math.max(0.05, (homeAttack * ha) * (awayDefence / avg));
   const lambdaAway = Math.max(0.05, awayAttack * (homeDefence / avg));

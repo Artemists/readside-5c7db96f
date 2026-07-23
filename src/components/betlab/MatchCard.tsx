@@ -210,6 +210,11 @@ export function MatchCard({ m }: { m: MatchCardData }) {
           Thin data · one bookmaker
         </p>
       ) : null}
+      {dataQualityOf(m) === "model" || dataQualityOf(m) === "model_single_book" ? (
+        <p className="caption-mono mt-1 text-[13px] text-text-muted">
+          Model-priced · not yet validated
+        </p>
+      ) : null}
       {m.provisional ? (
         <p className="caption-mono mt-1 text-[13px] text-text-muted">
           Provisional · price may move
