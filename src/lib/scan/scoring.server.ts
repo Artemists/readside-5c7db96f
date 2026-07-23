@@ -380,7 +380,8 @@ function buildValueResult(
       score: 50, edgePercent: null, bestOdds: null, bestSelection: null,
       fairProb: null, impliedProb: null, evPercent: null,
       note: "no priced markets available",
-      audit: { booksSeen: [], hasDraw: false, selections: [], winner: null, disqualifier: "no_market" },
+      winnerSource: null,
+      audit: { booksSeen: [], hasDraw: false, selections: [], winner: null, winnerSource: null, disqualifier: "no_market" },
       winnerMarket: null,
     };
   }
@@ -401,9 +402,10 @@ function buildValueResult(
       impliedProb: Math.round(w.bestImplied * 10000) / 10000,
       evPercent: Math.round(w.evPct * 100) / 100,
       note: `neutral — ${w.disqualifier ?? "no eligible selection"}`,
+      winnerSource: null,
       audit: {
         booksSeen: best.booksSeen, hasDraw: best.hasDraw,
-        selections: best.selections, winner: null, disqualifier: w.disqualifier,
+        selections: best.selections, winner: null, winnerSource: null, disqualifier: w.disqualifier,
       },
       winnerMarket: best.market,
     };
@@ -416,6 +418,7 @@ function buildValueResult(
   const cap = cfg.edgePctForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
   const score = clamp(50 + (clamped / cap) * 45, 0, 100);
+  const sourceTag = w.source === "model_single_book" ? " [model/single-book]" : "";
   return {
     score: Math.round(score * 10) / 10,
     edgePercent: Math.round(w.edgePct * 100) / 100,
@@ -424,14 +427,16 @@ function buildValueResult(
     fairProb: Math.round(w.fairProb * 10000) / 10000,
     impliedProb: Math.round(w.bestImplied * 10000) / 10000,
     evPercent: Math.round(w.evPct * 100) / 100,
-    note: `[${best.market}] best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%`,
+    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%`,
+    winnerSource: w.source,
     audit: {
       booksSeen: best.booksSeen, hasDraw: best.hasDraw,
-      selections: best.selections, winner: w.selection, disqualifier: null,
+      selections: best.selections, winner: w.selection, winnerSource: w.source, disqualifier: null,
     },
     winnerMarket: best.market,
   };
 }
+
 
 
 // -------------------- Trap (0..100) --------------------
