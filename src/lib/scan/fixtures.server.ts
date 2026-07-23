@@ -118,3 +118,151 @@ export async function fetchOddsForEvent(
   }
   return { event: raw as OddsEvent, status: "ok" };
 }
+
+export type SportProbeResult = {
+  sport: string;
+  ok: boolean;
+  status: number;
+  eventCount: number;
+  source: "sports_endpoint" | "events_probe";
+  error?: string;
+};
+
+const CANDIDATE_SPORTS = [
+  "football",
+  "basketball",
+  "tennis",
+  "hockey",
+  "baseball",
+  "americanfootball",
+  "mma",
+  "cricket",
+  "rugby",
+  "volleyball",
+] as const;
+
+async function probeEventsForSport(
+  sport: string,
+  apiKey: string,
+): Promise<SportProbeResult> {
+  const url = `${BASE}/events?sport=${encodeURIComponent(sport)}&apiKey=${encodeURIComponent(apiKey)}`;
+  try {
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    if (!res.ok) {
+      return { sport, ok: false, status: res.status, eventCount: 0, source: "events_probe" };
+    }
+    const body = (await res.json()) as unknown;
+    const arr: unknown[] = Array.isArray(body)
+      ? body
+      : Array.isArray((body as { events?: unknown[] })?.events)
+        ? ((body as { events?: unknown[] }).events as unknown[])
+        : [];
+    if (!Array.isArray(body) && body && typeof body === "object" && "error" in body) {
+      const err = String((body as { error?: unknown }).error ?? "unknown");
+      return { sport, ok: false, status: res.status, eventCount: 0, source: "events_probe", error: err };
+    }
+    return { sport, ok: true, status: res.status, eventCount: arr.length, source: "events_probe" };
+  } catch (err) {
+    return {
+      sport,
+      ok: false,
+      status: 0,
+      eventCount: 0,
+      source: "events_probe",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/** Probe which sports the odds provider actually serves on our plan.
+ *  Tries /v3/sports first; falls back to per-sport /v3/events probes.
+ *  Never throws — failures are returned as data. */
+export async function probeAvailableSports(
+  apiKey: string,
+): Promise<SportProbeResult[]> {
+  // Try the sports listing endpoint first.
+  const sportsUrl = `${BASE}/sports?apiKey=${encodeURIComponent(apiKey)}`;
+  try {
+    const res = await fetch(sportsUrl, { headers: { accept: "application/json" } });
+    if (res.ok) {
+      const body = (await res.json()) as unknown;
+      const arr: unknown[] = Array.isArray(body)
+        ? body
+        : Array.isArray((body as { sports?: unknown[] })?.sports)
+          ? ((body as { sports?: unknown[] }).sports as unknown[])
+          : [];
+      if (arr.length > 0) {
+        return arr.map((s) => {
+          const slug =
+            typeof s === "string"
+              ? s
+              : (s as { slug?: string; name?: string })?.slug ??
+                (s as { name?: string })?.name ??
+                "unknown";
+          return {
+            sport: String(slug),
+            ok: true,
+            status: res.status,
+            eventCount: -1, // unknown from listing endpoint
+            source: "sports_endpoint" as const,
+          };
+        });
+      }
+    }
+    // Non-ok or empty → fall through to events probing.
+  } catch {
+    // Ignore and fall through.
+  }
+
+  // Fallback: probe /v3/events for each candidate sport. Bounded (10 calls).
+  const results: SportProbeResult[] = [];
+  for (const sport of CANDIDATE_SPORTS) {
+    results.push(await probeEventsForSport(sport, apiKey));
+  }
+  return results;
+}
+
+export type SportDetailResult = {
+  sport: string;
+  eventCount: number;
+  sampled: Array<{
+    id: string;
+    home: string;
+    away: string;
+    league?: string;
+    bookmakers: Array<{ name: string; markets: string[] }>;
+  }>;
+  error?: string;
+};
+
+/** Fetch events for one sport, then for the first 3 events report leagues
+ *  and per-bookmaker market names. Uses up to 4 provider calls (1 events + 3 odds). */
+export async function probeSportDetail(
+  apiKey: string,
+  sport: string,
+): Promise<SportDetailResult> {
+  const listed = await listEvents(sport, apiKey);
+  if (listed.status !== "ok") {
+    return { sport, eventCount: 0, sampled: [], error: `list ${listed.status}` };
+  }
+  const first = listed.events.slice(0, 3);
+  const sampled: SportDetailResult["sampled"] = [];
+  for (const e of first) {
+    const { event } = await fetchOddsForEvent(e.id, apiKey, [
+      "Bet365",
+      "Novibet",
+    ]);
+    const books = event?.bookmakers ?? {};
+    sampled.push({
+      id: e.id,
+      home: e.home,
+      away: e.away,
+      league: e.league,
+      bookmakers: Object.entries(books).map(([name, markets]) => ({
+        name,
+        markets: (markets ?? []).map((m) => m.name),
+      })),
+    });
+  }
+  return { sport, eventCount: listed.events.length, sampled };
+}

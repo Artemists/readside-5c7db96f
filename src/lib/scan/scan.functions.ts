@@ -257,3 +257,53 @@ export const listUpcoming = createServerFn({ method: "GET" }).handler(async () =
     .order("kickoff", { ascending: true });
   return rows ?? [];
 });
+
+/**
+ * Read-only diagnostic. Probes the odds provider to discover which sports
+ * (and, for sports with events, which leagues + markets per bookmaker) are
+ * actually available on our plan. Manual invocation only — never called from
+ * a scan. Hard-capped to ~12 provider calls per invocation so it cannot burn
+ * the hourly quota.
+ */
+export const probeProviderCoverage = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const apiKey = process.env.ODDS_API_IO_KEY;
+    if (!apiKey) throw new Error("Missing ODDS_API_IO_KEY");
+    const { probeAvailableSports, probeSportDetail } = await import(
+      "./fixtures.server"
+    );
+
+    const MAX_CALLS = 12;
+    // Sports probe uses either 1 call (/v3/sports) or up to 10 (/v3/events × candidates).
+    const sports = await probeAvailableSports(apiKey);
+
+    // Assume worst case: sports probe used 10 calls if it fell back.
+    const sportsCallsUsed = sports.every((s) => s.source === "sports_endpoint")
+      ? 1
+      : sports.length;
+    let remaining = MAX_CALLS - sportsCallsUsed;
+
+    // Detail each sport known to have events. Each detail call uses up to
+    // 1 + 3 = 4 provider calls. Stop when we run out of budget.
+    const withEvents = sports.filter(
+      (s) => s.ok && (s.eventCount > 0 || s.eventCount === -1),
+    );
+    const details: Array<Awaited<ReturnType<typeof probeSportDetail>>> = [];
+    for (const s of withEvents) {
+      if (remaining < 4) break;
+      const detail = await probeSportDetail(apiKey, s.sport);
+      details.push(detail);
+      remaining -= 1 + Math.min(3, detail.eventCount);
+    }
+
+    const result = {
+      probedAt: new Date().toISOString(),
+      sports,
+      details,
+      budget: { max: MAX_CALLS, remaining },
+    };
+    console.log("provider:coverage", JSON.stringify(result));
+    return result;
+  },
+);
+
