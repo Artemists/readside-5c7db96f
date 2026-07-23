@@ -56,6 +56,7 @@ type TotalsQuote = { line: number; over: number; under: number; book: string };
 function extractOverUnderBy(
   event: OddsEvent,
   matcher: (name: string) => boolean,
+  debugLabel?: string,
 ): TotalsQuote[] {
   const out: TotalsQuote[] = [];
   const books = event.bookmakers ?? {};
@@ -63,9 +64,24 @@ function extractOverUnderBy(
     const ou = markets.find((m) => matcher((m.name ?? "").toLowerCase()));
     const row = ou?.odds?.[0];
     if (!row) continue;
-    const line = typeof row.max === "number" ? row.max : typeof row.hdp === "number" ? row.hdp : null;
+    // Providers occasionally return the line as a string; num() copes with both.
+    // Prefer `max` (odds-api.io's over/under line field), fall back to `hdp`.
+    const line = num(row.max) ?? num(row.hdp);
     const over = num(row.over);
     const under = num(row.under);
+    if (debugLabel) {
+      console.log("scoring:ou-raw", {
+        event: event.id,
+        label: debugLabel,
+        market: ou?.name,
+        book: bookName,
+        rawMax: row.max,
+        rawHdp: row.hdp,
+        parsedLine: line,
+        over,
+        under,
+      });
+    }
     if (line == null || over == null || under == null) continue;
     out.push({ line, over, under, book: bookName });
   }
