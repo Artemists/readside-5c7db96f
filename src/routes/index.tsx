@@ -18,7 +18,7 @@ import {
   runDailyScan,
 } from "@/lib/scan/scan.functions";
 import { athensLocalDate, athensLocalDateTime, athensLocalTime } from "@/lib/time";
-import { SCAN } from "@/lib/scan/config";
+
 import { MatchCard } from "@/components/betlab/MatchCard";
 
 
