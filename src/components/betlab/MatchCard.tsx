@@ -149,9 +149,7 @@ export function MatchCard({ m }: { m: MatchCardData }) {
   const fair = n(m.fair_probability);
   const implied = n(m.implied_probability);
   const isOpp = m.verdict === "opportunity";
-  const isIgnore = m.verdict === "ignore";
-  const isTrap = m.verdict === "trap";
-  const noBet = isIgnore || isTrap;
+  const noBet = m.verdict === "ignore" || m.verdict === "trap";
   const isPass = (m.stake ?? "Pass") === "Pass";
   const summary = summarySentence(m);
   const decision = decisionPhrase(m);
