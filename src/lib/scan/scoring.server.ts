@@ -451,7 +451,7 @@ function buildValueResult(
     (a.eligibleWinner!.evPct) > (b.eligibleWinner!.evPct) ? a : b,
   );
   const w = best.eligibleWinner!;
-  const cap = cfg.edgePctForFullScore;
+  const cap = cfg.edgePtsForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
   let score = clamp(50 + (clamped / cap) * 45, 0, 100);
   let singleBookNote = "";
