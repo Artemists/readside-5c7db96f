@@ -30,8 +30,9 @@ export const SCORING = {
       // matching only "premier" or "liga" never reach a high tier.
       { match: /\b(liga|serie|division|premier|super|cup|coupe|copa)\b/i, tier: 0.25 },
     ],
-    // Unknown competition → low tier so it produces spread against known leagues.
-    tierDefault: 0.15,
+    // Unknown competition → 1/10 (lowest). We know nothing about it, so it
+    // must not inherit any prestige by default.
+    tierDefault: 0.1,
     weights: { markets: 0.30, bookmakers: 0.20, tier: 0.50 },
     marketsCap: 4,       // 4+ markets => full points
     bookmakersCap: 2,    // plan allows 2 bookmakers max
