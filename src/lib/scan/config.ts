@@ -30,8 +30,9 @@ export const SCORING = {
       // matching only "premier" or "liga" never reach a high tier.
       { match: /\b(liga|serie|division|premier|super|cup|coupe|copa)\b/i, tier: 0.25 },
     ],
-    // Unknown competition → low tier so it produces spread against known leagues.
-    tierDefault: 0.15,
+    // Unknown competition → 1/10 (lowest). We know nothing about it, so it
+    // must not inherit any prestige by default.
+    tierDefault: 0.1,
     weights: { markets: 0.30, bookmakers: 0.20, tier: 0.50 },
     marketsCap: 4,       // 4+ markets => full points
     bookmakersCap: 2,    // plan allows 2 bookmakers max
@@ -51,10 +52,14 @@ export const SCORING = {
 
   // ------- Value (0..100) -------
   value: {
-    // Full positive score at ~8% edge. Above 15% is treated as suspicious.
-    edgePctForFullScore: 8,
-    // Edges above this are almost certainly bad/stale data with only 2 books.
-    suspiciousEdgePct: 15,
+    // Edge is measured in percentage POINTS (fair% − implied%), NOT as a
+    // ratio. All thresholds below consume points.
+    // Full positive Value score at ~4 pts. A 4-point edge on a 50% shot
+    // means fair 54% vs implied 50%.
+    edgePtsForFullScore: 4,
+    // Edges above ~8 points on our 2-book plan are almost certainly
+    // bad/stale data or a stat error, not a real signal.
+    suspiciousEdgePts: 8,
     // Long-shot pricing where de-vig math is unreliable.
     maxAllowedOdds: 6.0,
     // Minimum bookmakers that must quote the selection for a real value read.

@@ -289,10 +289,14 @@ function evaluateSelections(
       selFair = marketFairI;
     }
     let disqualifier: string | null = null;
-    const edgePct = ((selFair - best.implied) / best.implied) * 100;
+    // Edge in percentage POINTS: fair% − implied%. Never a ratio.
+    // A ratio (fair−implied)/implied inflates ~5× at long odds and would
+    // reject every legitimate longshot. All downstream gates and displays
+    // consume points; format as "pts", never "%".
+    const edgePct = (selFair - best.implied) * 100;
     const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
     if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
-    else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    else if (edgePct > cfg.suspiciousEdgePts) disqualifier = "suspicious_edge";
     return {
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
@@ -447,7 +451,7 @@ function buildValueResult(
     (a.eligibleWinner!.evPct) > (b.eligibleWinner!.evPct) ? a : b,
   );
   const w = best.eligibleWinner!;
-  const cap = cfg.edgePctForFullScore;
+  const cap = cfg.edgePtsForFullScore;
   const clamped = clamp(w.edgePct, -cap, cap);
   let score = clamp(50 + (clamped / cap) * 45, 0, 100);
   let singleBookNote = "";
@@ -476,7 +480,7 @@ function buildValueResult(
     fairProb: Math.round(w.fairProb * 10000) / 10000,
     impliedProb: Math.round(w.bestImplied * 10000) / 10000,
     evPercent: Math.round(w.evPct * 100) / 100,
-    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%${singleBookNote}`,
+    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct >= 0 ? "+" : ""}${w.edgePct.toFixed(1)} pts${singleBookNote}`,
     winnerSource: w.source,
     audit: {
       booksSeen: best.booksSeen, hasDraw: best.hasDraw,
@@ -546,7 +550,7 @@ function buildReasoning(
         ? "Public pressure and short favourite pricing outweigh any perceived edge."
         : "Insufficient edge or thin information — no bet.";
   const edge =
-    edgePercent != null ? ` Best-line edge ${edgePercent.toFixed(1)}%.` : "";
+    edgePercent != null ? ` Best-line edge ${edgePercent >= 0 ? "+" : ""}${edgePercent.toFixed(1)} pts.` : "";
   return `${prefix}${edge} Context: ${parts.ctx}. Explosion: ${parts.exp}. Value: ${parts.val}. Trap: ${parts.trap}.`;
 }
 

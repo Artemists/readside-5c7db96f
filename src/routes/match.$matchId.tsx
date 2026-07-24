@@ -105,6 +105,7 @@ function MatchDetail() {
       priceVerdictClass = "text-accent-dim";
     }
   }
+  const edgeLabel = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)} pts`;
 
   return (
     <PageShell>
@@ -183,8 +184,7 @@ function MatchDetail() {
             ) : null}
             {edge != null ? (
               <p className="caption-mono text-[13px] text-text-muted">
-                Edge {edge >= 0 ? "+" : ""}
-                {edge.toFixed(1)}%
+                Edge {edgeLabel(edge)}
               </p>
             ) : null}
           </div>
@@ -280,7 +280,7 @@ function MatchDetail() {
               />
               <KeyValueRow
                 k="Edge"
-                v={edge != null ? `${edge.toFixed(1)}%` : "—"}
+                v={edge != null ? edgeLabel(edge) : "—"}
               />
               <KeyValueRow
                 k="Data quality"

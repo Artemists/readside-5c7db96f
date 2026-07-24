@@ -205,6 +205,13 @@ export async function runScanNow() {
       }
       stage.oddsOk++;
       const books = odds.bookmakers ?? {};
+      // Reject any fixture with 0 priced books BEFORE scoring — a card with
+      // no book quotes is not a real read.
+      if (Object.keys(books).length === 0) {
+        stage.oddsError++;
+        console.log("scan:reject-no-books", { eventId: e.id, home: e.home, away: e.away });
+        continue;
+      }
       const seen = { moneyline: false, totals: false, corners: false, cards: false };
       for (const markets of Object.values(books)) {
         for (const m of markets) {
