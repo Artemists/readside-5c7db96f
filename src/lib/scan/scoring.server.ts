@@ -289,10 +289,13 @@ function evaluateSelections(
       selFair = marketFairI;
     }
     let disqualifier: string | null = null;
-    const edgePct = ((selFair - best.implied) / best.implied) * 100;
+    // Edge in percentage POINTS: fair% − implied%. Never a ratio.
+    // A ratio (fair−implied)/implied inflates ~5× at long odds and would
+    // reject every legitimate longshot.
+    const edgePts = (selFair - best.implied) * 100;
     const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
     if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
-    else if (edgePct > cfg.suspiciousEdgePct) disqualifier = "suspicious_edge";
+    else if (edgePts > cfg.suspiciousEdgePts) disqualifier = "suspicious_edge";
     return {
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
