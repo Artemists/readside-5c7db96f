@@ -52,10 +52,14 @@ export const SCORING = {
 
   // ------- Value (0..100) -------
   value: {
-    // Full positive score at ~8% edge. Above 15% is treated as suspicious.
-    edgePctForFullScore: 8,
-    // Edges above this are almost certainly bad/stale data with only 2 books.
-    suspiciousEdgePct: 15,
+    // Edge is measured in percentage POINTS (fair% − implied%), NOT as a
+    // ratio. All thresholds below consume points.
+    // Full positive Value score at ~4 pts. A 4-point edge on a 50% shot
+    // means fair 54% vs implied 50%.
+    edgePtsForFullScore: 4,
+    // Edges above ~8 points on our 2-book plan are almost certainly
+    // bad/stale data or a stat error, not a real signal.
+    suspiciousEdgePts: 8,
     // Long-shot pricing where de-vig math is unreliable.
     maxAllowedOdds: 6.0,
     // Minimum bookmakers that must quote the selection for a real value read.
