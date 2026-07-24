@@ -550,7 +550,7 @@ function buildReasoning(
         ? "Public pressure and short favourite pricing outweigh any perceived edge."
         : "Insufficient edge or thin information — no bet.";
   const edge =
-    edgePercent != null ? ` Best-line edge ${edgePercent.toFixed(1)}%.` : "";
+    edgePercent != null ? ` Best-line edge ${edgePercent >= 0 ? "+" : ""}${edgePercent.toFixed(1)} pts.` : "";
   return `${prefix}${edge} Context: ${parts.ctx}. Explosion: ${parts.exp}. Value: ${parts.val}. Trap: ${parts.trap}.`;
 }
 
