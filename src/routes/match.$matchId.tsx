@@ -105,6 +105,7 @@ function MatchDetail() {
       priceVerdictClass = "text-accent-dim";
     }
   }
+  const edgeLabel = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)} pts`;
 
   return (
     <PageShell>
