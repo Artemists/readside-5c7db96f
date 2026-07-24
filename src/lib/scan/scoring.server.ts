@@ -480,7 +480,7 @@ function buildValueResult(
     fairProb: Math.round(w.fairProb * 10000) / 10000,
     impliedProb: Math.round(w.bestImplied * 10000) / 10000,
     evPercent: Math.round(w.evPct * 100) / 100,
-    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct.toFixed(1)}%${singleBookNote}`,
+    note: `[${best.market}]${sourceTag} best ${w.selection} @ ${w.bestOdds.toFixed(2)} (${w.bestBook}), fair ${(w.fairProb * 100).toFixed(1)}%, edge ${w.edgePct >= 0 ? "+" : ""}${w.edgePct.toFixed(1)} pts${singleBookNote}`,
     winnerSource: w.source,
     audit: {
       booksSeen: best.booksSeen, hasDraw: best.hasDraw,
