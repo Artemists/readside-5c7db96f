@@ -291,11 +291,12 @@ function evaluateSelections(
     let disqualifier: string | null = null;
     // Edge in percentage POINTS: fair% − implied%. Never a ratio.
     // A ratio (fair−implied)/implied inflates ~5× at long odds and would
-    // reject every legitimate longshot.
-    const edgePts = (selFair - best.implied) * 100;
+    // reject every legitimate longshot. All downstream gates and displays
+    // consume points; format as "pts", never "%".
+    const edgePct = (selFair - best.implied) * 100;
     const evPct = (selFair * (best.odds - 1) - (1 - selFair)) * 100;
     if (best.odds > cfg.maxAllowedOdds) disqualifier = "long_shot";
-    else if (edgePts > cfg.suspiciousEdgePts) disqualifier = "suspicious_edge";
+    else if (edgePct > cfg.suspiciousEdgePts) disqualifier = "suspicious_edge";
     return {
       selection: sel as SelectionAudit["selection"],
       quotes: priced,
