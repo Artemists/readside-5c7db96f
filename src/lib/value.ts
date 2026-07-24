@@ -8,11 +8,13 @@ export function impliedProbability(decimalOdds: number): number {
   return 1 / decimalOdds;
 }
 
-/** Edge % = (fair probability - implied probability) / implied probability. */
+/**
+ * Edge in percentage POINTS: fair% − implied%.
+ * Not a ratio — do NOT divide by implied probability. Format as "pts".
+ */
 export function edgePercent(fairProb: number, decimalOdds: number): number {
   const implied = impliedProbability(decimalOdds);
-  if (implied === 0) return 0;
-  return ((fairProb - implied) / implied) * 100;
+  return (fairProb - implied) * 100;
 }
 
 /** Expected value per 1 unit staked. */
