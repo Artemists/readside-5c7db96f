@@ -184,8 +184,7 @@ function MatchDetail() {
             ) : null}
             {edge != null ? (
               <p className="caption-mono text-[13px] text-text-muted">
-                Edge {edge >= 0 ? "+" : ""}
-                {edge.toFixed(1)}%
+                Edge {edgeLabel(edge)}
               </p>
             ) : null}
           </div>
