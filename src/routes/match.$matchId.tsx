@@ -280,7 +280,7 @@ function MatchDetail() {
               />
               <KeyValueRow
                 k="Edge"
-                v={edge != null ? `${edge.toFixed(1)}%` : "—"}
+                v={edge != null ? edgeLabel(edge) : "—"}
               />
               <KeyValueRow
                 k="Data quality"
