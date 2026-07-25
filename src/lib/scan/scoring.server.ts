@@ -525,13 +525,17 @@ function trapScore(
 
 // -------------------- Verdict / stake / reasoning --------------------
 function decideVerdict(
-  ctx: number, val: number, trap: number,
+  ctx: number,
+  val: number,
+  trap: number,
+  available: { context: boolean; value: boolean; trap: boolean },
 ): Verdict {
-  if (trap >= VERDICT.trapScoreMin) return "trap";
+  if (available.trap && trap >= VERDICT.trapScoreMin) return "trap";
   if (
+    available.value &&
     val >= VERDICT.opportunityValueMin &&
-    ctx >= VERDICT.opportunityContextMin &&
-    trap < VERDICT.opportunityTrapMax
+    (!available.context || ctx >= VERDICT.opportunityContextMin) &&
+    (!available.trap || trap < VERDICT.opportunityTrapMax)
   ) {
     return "opportunity";
   }
