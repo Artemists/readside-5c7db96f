@@ -525,13 +525,17 @@ function trapScore(
 
 // -------------------- Verdict / stake / reasoning --------------------
 function decideVerdict(
-  ctx: number, val: number, trap: number,
+  ctx: number,
+  val: number,
+  trap: number,
+  available: { context: boolean; value: boolean; trap: boolean },
 ): Verdict {
-  if (trap >= VERDICT.trapScoreMin) return "trap";
+  if (available.trap && trap >= VERDICT.trapScoreMin) return "trap";
   if (
+    available.value &&
     val >= VERDICT.opportunityValueMin &&
-    ctx >= VERDICT.opportunityContextMin &&
-    trap < VERDICT.opportunityTrapMax
+    (!available.context || ctx >= VERDICT.opportunityContextMin) &&
+    (!available.trap || trap < VERDICT.opportunityTrapMax)
   ) {
     return "opportunity";
   }
@@ -577,7 +581,13 @@ export function scoreEvent(
   const exp = explosionScore(event, quotes);
   const trap = trapScore(event, quotes);
 
-  const verdict = decideVerdict(ctx.score, val.score, trap.score);
+  const bookCount = Object.keys(event.bookmakers ?? {}).length;
+  const available = {
+    context: bookCount > 0,
+    value: val.audit.disqualifier !== "no_market" && val.audit.selections.length > 0,
+    trap: quotes.length > 0,
+  };
+  const verdict = decideVerdict(ctx.score, val.score, trap.score, available);
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
   const ws = val.winnerSource;
   const modelPriced = ws === "model" || ws === "model_single_book";

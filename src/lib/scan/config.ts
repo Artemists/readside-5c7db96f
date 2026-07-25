@@ -146,7 +146,7 @@ export const SCAN = {
   // accuracy actually matters (closing line, settlement).
   nearKickoffRefreshHours: 6,
   // Hard cap on how many events we score per scan (quota control).
-  maxEvents: 30,
+  maxEvents: 60,
   // How far ahead of "now" we pull fixtures for.
   windowHours: 72,
   // Rows for kickoffs beyond this horizon are marked provisional (odds/lines
