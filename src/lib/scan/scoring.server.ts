@@ -581,7 +581,13 @@ export function scoreEvent(
   const exp = explosionScore(event, quotes);
   const trap = trapScore(event, quotes);
 
-  const verdict = decideVerdict(ctx.score, val.score, trap.score);
+  const bookCount = Object.keys(event.bookmakers ?? {}).length;
+  const available = {
+    context: bookCount > 0,
+    value: val.audit.disqualifier !== "no_market" && val.audit.selections.length > 0,
+    trap: quotes.length > 0,
+  };
+  const verdict = decideVerdict(ctx.score, val.score, trap.score, available);
   const confidenceRaw = ctx.score * 0.4 + (val.score / 10) * 0.6;
   const ws = val.winnerSource;
   const modelPriced = ws === "model" || ws === "model_single_book";
