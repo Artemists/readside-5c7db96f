@@ -1,0 +1,14 @@
+# Readside BetLab
+
+> A daily football-market scanner that grades upcoming fixtures as Opportunity, Trap, or Ignore using Value, Context, Explosion, and Trap scores.
+
+Readside BetLab pulls live odds and independent probability models to surface where the market may be mispriced. Every match card explains the reasoning in plain language: recommended market and selection, best available odds, stake sizing, and a confidence read. Model-priced picks are labelled as "not yet validated" so readers can weigh evidence quality.
+
+## Pages
+- [Today's briefing](/): Live scan of today's football fixtures with Opportunity, Trap and Ignore verdicts.
+- [All matches](/matches): Full list of scanned fixtures within the 72-hour window.
+- [Match detail](/match/$matchId): Per-match breakdown — the answer, price check, stake, confidence, and score bars.
+
+## Optional
+- [Sitemap](/sitemap.xml)
+- [Robots](/robots.txt)
