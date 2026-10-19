@@ -153,5 +153,5 @@ export const SCAN = {
   // will move a lot before kickoff).
   provisionalAfterHours: 24,
   sports: ["football"] as const,
-  bookmakers: ["Bet365", "Novibet"] as const,
+  bookmakers: ["Betfair Sportsbook", "Novibet"] as const,
 };
