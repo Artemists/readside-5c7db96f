@@ -353,7 +353,7 @@ function MatchMissing() {
   );
 }
 
-function MatchErr({ reset }: { error: Error; reset: () => void }) {
+function MatchErr({ reset }: { error: unknown; reset: () => void }) {
   const router = useRouter();
   return (
     <PageShell>
